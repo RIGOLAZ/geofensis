@@ -1,0 +1,98 @@
+﻿import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Box,
+  Paper,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
+  IconButton,
+  Tooltip,
+} from '@mui/material';
+import {
+  Visibility as ViewIcon,
+  LocationOn as LocationIcon,
+} from '@mui/icons-material';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+
+const DevicesListPage = () => {
+  const [devices, setDevices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'devices'), (snapshot) => {
+      const devicesData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        lastUpdate: doc.data().lastUpdate?.toDate?.().toLocaleString() || 'Jamais',
+      }));
+      setDevices(devicesData);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" gutterBottom>
+        Devices ConnectÃ©s
+      </Typography>
+
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>ID</TableCell>
+              <TableCell>Utilisateur</TableCell>
+              <TableCell>Plateforme</TableCell>
+              <TableCell>Statut</TableCell>
+              <TableCell>DerniÃ¨re mise Ã  jour</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {devices.map((device) => (
+              <TableRow key={device.id}>
+                <TableCell>{device.id}</TableCell>
+                <TableCell>{device.owner || 'Inconnu'}</TableCell>
+                <TableCell>{device.platform || 'Inconnu'}</TableCell>
+                <TableCell>
+                  <Chip
+                    label={device.online ? 'En ligne' : 'Hors ligne'}
+                    color={device.online ? 'success' : 'error'}
+                    size="small"
+                  />
+                </TableCell>
+                <TableCell>{device.lastUpdate}</TableCell>
+                <TableCell>
+                  <Tooltip title="Voir sur la carte">
+                    <IconButton
+                      onClick={() => navigate('/dashboard', { state: { focusDevice: device.id } })}
+                    >
+                      <LocationIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="DÃ©tails">
+                    <IconButton>
+                      <ViewIcon />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Box>
+  );
+};
+
+export default DevicesListPage;

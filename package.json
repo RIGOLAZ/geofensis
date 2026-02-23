@@ -1,0 +1,34 @@
+{
+  "name": "geofencing-pro",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "mobile",
+    "web-admin",
+    "functions",
+    "shared"
+  ],
+  "scripts": {
+    "install:all": "npm install && npm run install:mobile && npm run install:web && npm run install:functions",
+    "install:mobile": "cd mobile && npm install",
+    "install:web": "cd web-admin && npm install",
+    "install:functions": "cd functions && npm install",
+    "dev:mobile": "cd mobile && npx expo start",
+    "dev:web": "cd web-admin && npm run dev",
+    "serve:functions": "cd functions && npm run serve",
+    "deploy:all": "npm run deploy:functions && npm run deploy:web && npm run deploy:mobile",
+    "deploy:functions": "cd functions && firebase deploy --only functions",
+    "deploy:web": "cd web-admin && npm run build && firebase deploy --only hosting",
+    "deploy:mobile": "cd mobile && eas build --platform all",
+    "test": "npm run test:mobile && npm run test:web && npm run test:functions",
+    "test:mobile": "cd mobile && npm test",
+    "test:web": "cd web-admin && npm test",
+    "test:functions": "cd functions && npm test"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "husky": "^8.0.3",
+    "lint-staged": "^13.2.3",
+    "rollup-plugin-visualizer": "^7.0.0"
+  }
+}

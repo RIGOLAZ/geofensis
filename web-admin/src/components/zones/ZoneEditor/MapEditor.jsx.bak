@@ -1,0 +1,298 @@
+import React, { useState, useCallback, useRef } from 'react';
+import { GoogleMap, useJsApiLoader, DrawingManager, Polygon, Circle } from '@react-google-maps/api';
+import { Box, Paper, Typography, Button, TextField, FormControl, InputLabel, Select, MenuItem, Switch, FormControlLabel, Chip, Stack } from '@mui/material';
+
+const libraries = ['drawing', 'geometry'];
+
+const MapEditor = ({ onSave, initialZone = null }) => {
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+    libraries,
+  });
+
+  const [map, setMap] = useState(null);
+  const [drawingMode, setDrawingMode] = useState(null);
+  const [zoneData, setZoneData] = useState({
+    name: '',
+    type: 'circle',
+    description: '',
+    alertLevel: 'medium',
+    entryMessage: '',
+    exitMessage: '',
+    smsAlert: false,
+    contactPhone: '',
+    soundAlert: true,
+    predictiveAlerts: true,
+    active: true,
+    ...initialZone,
+  });
+  const [geometry, setGeometry] = useState(null);
+  const drawingManagerRef = useRef(null);
+
+  const onLoad = useCallback((map) => {
+    setMap(map);
+  }, []);
+
+  const onOverlayComplete = (e) => {
+    const newGeometry = e.overlay;
+
+    if (e.type === 'circle') {
+      const center = newGeometry.getCenter();
+      const radius = newGeometry.getRadius();
+
+      setGeometry({
+        type: 'circle',
+        center: { lat: center.lat(), lng: center.lng() },
+        radius: radius,
+      });
+    } else if (e.type === 'polygon') {
+      const path = newGeometry.getPath();
+      const coordinates = [];
+
+      for (let i = 0; i < path.getLength(); i++) {
+        const point = path.getAt(i);
+        coordinates.push({ lat: point.lat(), lng: point.lng() });
+      }
+
+      setGeometry({
+        type: 'polygon',
+        coordinates: coordinates,
+      });
+    }
+
+    setDrawingMode(null);
+  };
+
+  const handleSave = () => {
+    if (!geometry) {
+      alert('Veuillez dessiner une zone sur la carte');
+      return;
+    }
+
+    onSave({
+      ...zoneData,
+      ...geometry,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  };
+
+  if (!isLoaded) return <div>Chargement...</div>;
+
+  return (
+    <Box sx={{ display: 'flex', height: '100vh' }}>
+      <Paper sx={{ width: 400, p: 3, overflow: 'auto' }}>
+        <Typography variant="h5" gutterBottom>
+          {initialZone ? 'Modifier la Zone' : 'Nouvelle Zone'}
+        </Typography>
+
+        <TextField
+          fullWidth
+          label="Nom de la zone"
+          value={zoneData.name}
+          onChange={(e) => setZoneData({ ...zoneData, name: e.target.value })}
+          margin="normal"
+          required
+        />
+
+        <TextField
+          fullWidth
+          label="Description"
+          multiline
+          rows={3}
+          value={zoneData.description}
+          onChange={(e) => setZoneData({ ...zoneData, description: e.target.value })}
+          margin="normal"
+        />
+
+        <FormControl fullWidth margin="normal">
+          <InputLabel>Niveau d'alerte</InputLabel>
+          <Select
+            value={zoneData.alertLevel}
+            onChange={(e) => setZoneData({ ...zoneData, alertLevel: e.target.value })}
+          >
+            <MenuItem value="low">Faible (Vert)</MenuItem>
+            <MenuItem value="medium">Moyen (Orange)</MenuItem>
+            <MenuItem value="high">Critique (Rouge)</MenuItem>
+          </Select>
+        </FormControl>
+
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            Messages personnalisés
+          </Typography>
+          <TextField
+            fullWidth
+            label="Message d'entrée"
+            value={zoneData.entryMessage}
+            onChange={(e) => setZoneData({ ...zoneData, entryMessage: e.target.value })}
+            margin="dense"
+            placeholder="Vous entrez dans une zone sécurisée"
+          />
+          <TextField
+            fullWidth
+            label="Message de sortie"
+            value={zoneData.exitMessage}
+            onChange={(e) => setZoneData({ ...zoneData, exitMessage: e.target.value })}
+            margin="dense"
+            placeholder="Vous quittez la zone"
+          />
+        </Box>
+
+        <Box sx={{ mt: 2 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={zoneData.smsAlert}
+                onChange={(e) => setZoneData({ ...zoneData, smsAlert: e.target.checked })}
+              />
+            }
+            label="Alerte SMS"
+          />
+
+          {zoneData.smsAlert && (
+            <TextField
+              fullWidth
+              label="Numéro de contact"
+              value={zoneData.contactPhone}
+              onChange={(e) => setZoneData({ ...zoneData, contactPhone: e.target.value })}
+              margin="normal"
+            />
+          )}
+        </Box>
+
+        <FormControlLabel
+          control={
+            <Switch
+              checked={zoneData.soundAlert}
+              onChange={(e) => setZoneData({ ...zoneData, soundAlert: e.target.checked })}
+            />
+          }
+          label="Alerte sonore"
+        />
+
+        <FormControlLabel
+          control={
+            <Switch
+              checked={zoneData.predictiveAlerts}
+              onChange={(e) => setZoneData({ ...zoneData, predictiveAlerts: e.target.checked })}
+            />
+          }
+          label="Alertes prédictives (30s avant)"
+        />
+
+        <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSave}
+            fullWidth
+            disabled={!geometry}
+          >
+            Sauvegarder
+          </Button>
+        </Stack>
+
+        <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+          <Button
+            variant={drawingMode === 'circle' ? 'contained' : 'outlined'}
+            onClick={() => setDrawingMode(drawingMode === 'circle' ? null : 'circle')}
+            size="small"
+          >
+            Cercle
+          </Button>
+          <Button
+            variant={drawingMode === 'polygon' ? 'contained' : 'outlined'}
+            onClick={() => setDrawingMode(drawingMode === 'polygon' ? null : 'polygon')}
+            size="small"
+          >
+            Polygone
+          </Button>
+        </Stack>
+
+        {geometry && (
+          <Box sx={{ mt: 2 }}>
+            <Chip
+              label={`Type: ${geometry.type}`}
+              color="success"
+              variant="outlined"
+            />
+            {geometry.type === 'circle' && (
+              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                Rayon: {(geometry.radius / 1000).toFixed(2)} km
+              </Typography>
+            )}
+            {geometry.type === 'polygon' && (
+              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                Points: {geometry.coordinates.length}
+              </Typography>
+            )}
+          </Box>
+        )}
+      </Paper>
+
+      <Box sx={{ flex: 1 }}>
+        <GoogleMap
+          mapContainerStyle={{ width: '100%', height: '100%' }}
+          center={{ lat: 48.8566, lng: 2.3522 }}
+          zoom={13}
+          onLoad={onLoad}
+          options={{
+            mapTypeId: 'hybrid',
+            drawingControl: false,
+          }}
+        >
+          <DrawingManager
+            onLoad={(ref) => (drawingManagerRef.current = ref)}
+            onOverlayComplete={onOverlayComplete}
+            options={{
+              drawingControl: false,
+              drawingMode: drawingMode,
+              circleOptions: {
+                fillColor: '#2196f3',
+                fillOpacity: 0.3,
+                strokeWeight: 2,
+                clickable: false,
+                editable: true,
+                zIndex: 1,
+              },
+              polygonOptions: {
+                fillColor: '#2196f3',
+                fillOpacity: 0.3,
+                strokeWeight: 2,
+                clickable: false,
+                editable: true,
+                zIndex: 1,
+              },
+            }}
+          />
+
+          {geometry?.type === 'circle' && (
+            <Circle
+              center={geometry.center}
+              radius={geometry.radius}
+              options={{
+                fillColor: '#ff0000',
+                fillOpacity: 0.3,
+                strokeColor: '#ff0000',
+              }}
+            />
+          )}
+
+          {geometry?.type === 'polygon' && (
+            <Polygon
+              paths={geometry.coordinates}
+              options={{
+                fillColor: '#ff0000',
+                fillOpacity: 0.3,
+                strokeColor: '#ff0000',
+              }}
+            />
+          )}
+        </GoogleMap>
+      </Box>
+    </Box>
+  );
+};
+
+export default MapEditor;

@@ -1,0 +1,13 @@
+{
+  "twilio": {
+    "sid": "your_twilio_sid",
+    "token": "your_twilio_token",
+    "phone": "+1234567890"
+  },
+  "sendgrid": {
+    "api_key": "your_sendgrid_key"
+  },
+  "webhook": {
+    "secret": "your_webhook_secret"
+  }
+}

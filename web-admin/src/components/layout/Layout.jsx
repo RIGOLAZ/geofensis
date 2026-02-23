@@ -1,0 +1,25 @@
+﻿import React from 'react';
+import { Box } from '@mui/material';
+import Navbar from '../navbar/Navbar';
+import Sidebar from '../sidebar/Sidebar';
+
+const Layout = ({ children }) => {
+  return React.createElement(
+    Box,
+    { sx: { display: 'flex', height: '100vh' } },
+    React.createElement(Sidebar, null),
+    React.createElement(
+      Box,
+      { sx: { flexGrow: 1, display: 'flex', flexDirection: 'column' } },
+      React.createElement(Navbar, null),
+      React.createElement(
+        Box,
+        { component: 'main', sx: { flexGrow: 1, bgcolor: '#f5f5f5', p: 3 } },
+        children
+      )
+    )
+  );
+};
+
+export default Layout;
+

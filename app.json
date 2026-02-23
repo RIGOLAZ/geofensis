@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "3e0a5e1f-fa88-4699-bb86-a20831e3c4ff"
+      }
+    },
+    "owner": "rigolaz",
+    "slug": "geofensis"
+  }
+}

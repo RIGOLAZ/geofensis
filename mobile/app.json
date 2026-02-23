@@ -1,0 +1,74 @@
+{
+  "expo": {
+    "name": "Geofencing Pro",
+    "slug": "geofencing-pro",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/icons/app-icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./src/assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1976D2"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.geofencingpro",
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Cette application utilise votre localisation pour le geofencing.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Cette application utilise votre localisation en arrière-plan pour surveiller les zones.",
+        "NSLocationAlwaysUsageDescription": "Cette application utilise votre localisation en arrière-plan pour surveiller les zones.",
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/icons/adaptive-icon.png",
+        "backgroundColor": "#1976D2"
+      },
+      "package": "com.yourcompany.geofencingpro",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "WAKE_LOCK"
+      ],
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {
+      "favicon": "./src/assets/icons/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./src/assets/icons/notification-icon.png",
+          "color": "#1976D2"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3e0a5e1f-fa88-4699-bb86-a20831e3c4ff"
+      }
+    }
+  }
+}

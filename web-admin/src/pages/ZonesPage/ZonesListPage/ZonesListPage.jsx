@@ -1,0 +1,328 @@
+﻿import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Paper,
+  Typography,
+  Button,
+  IconButton,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  Alert,
+  Snackbar
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Place as PlaceIcon
+} from '@mui/icons-material';
+import { DataGrid, frFR } from '@mui/x-data-grid';
+import { collection, query, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../../config/firebase';
+import { useNavigate } from 'react-router-dom';
+
+const ZonesListPage = () => {
+  const navigate = useNavigate();
+  const [zones, setZones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, zone: null });
+  const [editDialog, setEditDialog] = useState({ open: false, zone: null });
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  useEffect(() => {
+    const q = query(collection(db, 'zones'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const zonesData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setZones(zonesData);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleDelete = async () => {
+    try {
+      await deleteDoc(doc(db, 'zones', deleteDialog.zone.id));
+      setSnackbar({
+        open: true,
+        message: 'Zone supprimee avec succes',
+        severity: 'success'
+      });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: 'Erreur lors de la suppression',
+        severity: 'error'
+      });
+    }
+    setDeleteDialog({ open: false, zone: null });
+  };
+
+  const handleEdit = async () => {
+    try {
+      await updateDoc(doc(db, 'zones', editDialog.zone.id), {
+        name: editDialog.zone.name,
+        type: editDialog.zone.type,
+        description: editDialog.zone.description
+      });
+      setSnackbar({
+        open: true,
+        message: 'Zone modifiee avec succes',
+        severity: 'success'
+      });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: 'Erreur lors de la modification',
+        severity: 'error'
+      });
+    }
+    setEditDialog({ open: false, zone: null });
+  };
+
+  // FIXED: Added quotes around the string in the ternary operator
+  const deleteConfirmationMessage = deleteDialog.zone?.name 
+  ? 'Confirmez la suppression de la zone: ' + deleteDialog.zone.name  // ✅ Properly quoted
+  : 'Confirmez la suppression de cette zone';
+
+  const columns = [
+    { field: 'name', headerName: 'Nom', flex: 1 },
+    { field: 'description', headerName: 'Description', flex: 2 },
+    {
+      field: 'type',
+      headerName: 'Type',
+      width: 120,
+      renderCell: (params) => {
+        return React.createElement(
+          Chip,
+          {
+            label: params.value === 'circle' ? 'Cercle' : 'Polygone',
+            size: 'small',
+            color: params.value === 'circle' ? 'primary' : 'secondary',
+            variant: 'outlined'
+          }
+        );
+      }
+    },
+    {
+      field: 'coordinates',
+      headerName: 'Coordonnees',
+      width: 120,
+      valueGetter: (params) => {
+        return params.value ? params.value.length : 0;
+      },
+      renderCell: (params) => {
+        return React.createElement(
+          Chip,
+          {
+            icon: React.createElement(PlaceIcon),
+            label: params.value || 0,
+            size: 'small'
+          }
+        );
+      }
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 120,
+      sortable: false,
+      renderCell: (params) => {
+        return React.createElement(
+          Box,
+          null,
+          React.createElement(
+            IconButton,
+            {
+              size: 'small',
+              onClick: () => setEditDialog({ open: true, zone: params.row }),
+              color: 'primary'
+            },
+            React.createElement(EditIcon)
+          ),
+          React.createElement(
+            IconButton,
+            {
+              size: 'small',
+              onClick: () => setDeleteDialog({ open: true, zone: params.row }),
+              color: 'error'
+            },
+            React.createElement(DeleteIcon)
+          )
+        );
+      }
+    }
+  ];
+
+  return React.createElement(
+    Box,
+    { sx: { p: 3 } },
+    React.createElement(
+      Box,
+      { sx: { display: 'flex', justifyContent: 'space-between', mb: 3 } },
+      React.createElement(
+        Typography,
+        { variant: 'h4' },
+        'Gestion des Zones'
+      ),
+      React.createElement(
+        Button,
+        {
+          variant: 'contained',
+          startIcon: React.createElement(AddIcon),
+          onClick: () => navigate('/zones/create')
+        },
+        'Nouvelle Zone'
+      )
+    ),
+    React.createElement(
+      Paper,
+      { sx: { height: 600, width: '100%' } },
+      React.createElement(DataGrid, {
+        rows: zones,
+        columns: columns,
+        loading: loading,
+        pageSizeOptions: [5, 10, 25],
+        initialState: {
+          pagination: { paginationModel: { pageSize: 10 } }
+        },
+        localeText: frFR.components.MuiDataGrid.defaultProps.localeText
+      })
+    ),
+    React.createElement(
+      Dialog,
+      {
+        open: deleteDialog.open,
+        onClose: () => setDeleteDialog({ open: false, zone: null })
+      },
+      React.createElement(
+        DialogTitle,
+        null,
+        'Confirmation de suppression'
+      ),
+      React.createElement(
+        DialogContent,
+        null,
+        React.createElement(
+          Typography,
+          null,
+          deleteConfirmationMessage
+        )
+      ),
+      React.createElement(
+        DialogActions,
+        null,
+        React.createElement(
+          Button,
+          { onClick: () => setDeleteDialog({ open: false, zone: null }) },
+          'Annuler'
+        ),
+        React.createElement(
+          Button,
+          { onClick: handleDelete, color: 'error', variant: 'contained' },
+          'supprimer'
+        )
+      )
+    ),
+    React.createElement(
+      Dialog,
+      {
+        open: editDialog.open,
+        onClose: () => setEditDialog({ open: false, zone: null }),
+        maxWidth: 'sm',
+        fullWidth: true
+      },
+      React.createElement(
+        DialogTitle,
+        null,
+        'Modifier la zone'
+      ),
+      React.createElement(
+        DialogContent,
+        null,
+        React.createElement(
+          Box,
+          { sx: { pt: 2 } },
+          React.createElement(TextField, {
+            fullWidth: true,
+            label: 'Nom',
+            value: editDialog.zone?.name || '',
+            onChange: (e) => setEditDialog({
+              ...editDialog,
+              zone: { ...editDialog.zone, name: e.target.value }
+            }),
+            margin: 'normal'
+          }),
+          React.createElement(TextField, {
+            fullWidth: true,
+            label: 'Description',
+            value: editDialog.zone?.description || '',
+            onChange: (e) => setEditDialog({
+              ...editDialog,
+              zone: { ...editDialog.zone, description: e.target.value }
+            }),
+            margin: 'normal',
+            multiline: true,
+            rows: 2
+          }),
+          React.createElement(TextField, {
+            fullWidth: true,
+            select: true,
+            label: 'Type',
+            value: editDialog.zone?.type || 'circle',
+            onChange: (e) => setEditDialog({
+              ...editDialog,
+              zone: { ...editDialog.zone, type: e.target.value }
+            }),
+            margin: 'normal'
+          },
+          React.createElement(MenuItem, { value: 'circle' }, 'Cercle'),
+          React.createElement(MenuItem, { value: 'polygon' }, 'Polygone')
+          )
+        )
+      ),
+      React.createElement(
+        DialogActions,
+        null,
+        React.createElement(
+          Button,
+          { onClick: () => setEditDialog({ open: false, zone: null }) },
+          'Annuler'
+        ),
+        React.createElement(
+          Button,
+          { onClick: handleEdit, color: 'primary', variant: 'contained' },
+          'Enregistrer'
+        )
+      )
+    ),
+    React.createElement(
+      Snackbar,
+      {
+        open: snackbar.open,
+        autoHideDuration: 6000,
+        onClose: () => setSnackbar({ ...snackbar, open: false })
+      },
+      React.createElement(
+        Alert,
+        {
+          onClose: () => setSnackbar({ ...snackbar, open: false }),
+          severity: snackbar.severity,
+          sx: { width: '100%' }
+        },
+        snackbar.message
+      )
+    )
+  );
+};
+
+export default ZonesListPage;
+
