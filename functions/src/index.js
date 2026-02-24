@@ -1,24 +1,33 @@
-const functions = require('firebase-functions');
+﻿const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 
 admin.initializeApp();
 
-// Import des triggers
-const { onGeofenceEvent } = require('./triggers/onGeofenceEvent');
-const { onDeviceStatusChange } = require('./triggers/onDeviceStatusChange');
-const { onUserCreate } = require('./triggers/onUserCreate');
+// Triggers
+const geofenceModule = require('./triggers/onGeofenceEvent');
+const onGeofenceEvent = geofenceModule.onGeofenceEvent || geofenceModule;
 
-// Import des scheduled functions
-const { cleanupOldLogs } = require('./triggers/scheduled/cleanupOldLogs');
-const { dailyReport } = require('./triggers/scheduled/dailyReport');
+const deviceStatusModule = require('./triggers/onDeviceStatusChange');
+const onDeviceStatusChange = deviceStatusModule.onDeviceStatusChange || deviceStatusModule;
 
-// Export des fonctions
+// HTTP API
+const zonesModule = require('./http/api/zones');
+const zonesApi = zonesModule.zonesApi || zonesModule;
+
+const devicesModule = require('./http/api/devices');
+const devicesApi = devicesModule.devicesApi || devicesModule;
+
+// Scheduled functions
+const cleanupModule = require('./triggers/scheduled/cleanupOldLogs');
+const cleanupOldLogs = cleanupModule.cleanupOldLogs || cleanupModule;
+
+const dailyReportModule = require('./triggers/scheduled/dailyReport');
+const dailyReport = dailyReportModule.dailyReport || dailyReportModule;
+
 exports.onGeofenceEvent = onGeofenceEvent;
 exports.onDeviceStatusChange = onDeviceStatusChange;
-exports.onUserCreate = onUserCreate;
 exports.cleanupOldLogs = cleanupOldLogs;
 exports.dailyReport = dailyReport;
 
-// HTTP API (optionnel)
-const { api } = require('./http/api/zones');
-exports.api = api;
+exports.apiZones = functions.https.onRequest(zonesApi);
+exports.apiDevices = functions.https.onRequest(devicesApi);

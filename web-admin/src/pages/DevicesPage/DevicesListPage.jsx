@@ -1,8 +1,5 @@
-﻿import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+﻿import React from 'react'
 import {
-  Box,
-  Paper,
   Typography,
   Table,
   TableBody,
@@ -10,40 +7,21 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Paper,
   Chip,
-  IconButton,
-  Tooltip,
-} from '@mui/material';
-import {
-  Visibility as ViewIcon,
-  LocationOn as LocationIcon,
-} from '@mui/icons-material';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+} from '@mui/material'
 
-const DevicesListPage = () => {
-  const [devices, setDevices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+const devices = [
+  { id: 'DEV001', name: 'Smartphone Ouvrier 1', status: 'online', battery: 85, lastSeen: '2 min' },
+  { id: 'DEV002', name: 'Tablette Superviseur', status: 'online', battery: 62, lastSeen: '5 min' },
+  { id: 'DEV003', name: 'Bracelet Sécurité 1', status: 'offline', battery: 12, lastSeen: '2h' },
+]
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'devices'), (snapshot) => {
-      const devicesData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        lastUpdate: doc.data().lastUpdate?.toDate?.().toLocaleString() || 'Jamais',
-      }));
-      setDevices(devicesData);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
+export default function DevicesPage() {
   return (
-    <Box sx={{ p: 3 }}>
+    <div>
       <Typography variant="h4" gutterBottom>
-        Devices ConnectÃ©s
+        Devices Connectés
       </Typography>
 
       <TableContainer component={Paper}>
@@ -51,48 +29,31 @@ const DevicesListPage = () => {
           <TableHead>
             <TableRow>
               <TableCell>ID</TableCell>
-              <TableCell>Utilisateur</TableCell>
-              <TableCell>Plateforme</TableCell>
+              <TableCell>Nom</TableCell>
               <TableCell>Statut</TableCell>
-              <TableCell>DerniÃ¨re mise Ã  jour</TableCell>
-              <TableCell>Actions</TableCell>
+              <TableCell>Batterie</TableCell>
+              <TableCell>Dernière activité</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {devices.map((device) => (
               <TableRow key={device.id}>
                 <TableCell>{device.id}</TableCell>
-                <TableCell>{device.owner || 'Inconnu'}</TableCell>
-                <TableCell>{device.platform || 'Inconnu'}</TableCell>
+                <TableCell>{device.name}</TableCell>
                 <TableCell>
                   <Chip
-                    label={device.online ? 'En ligne' : 'Hors ligne'}
-                    color={device.online ? 'success' : 'error'}
                     size="small"
+                    label={device.status}
+                    color={device.status === 'online' ? 'success' : 'error'}
                   />
                 </TableCell>
-                <TableCell>{device.lastUpdate}</TableCell>
-                <TableCell>
-                  <Tooltip title="Voir sur la carte">
-                    <IconButton
-                      onClick={() => navigate('/dashboard', { state: { focusDevice: device.id } })}
-                    >
-                      <LocationIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="DÃ©tails">
-                    <IconButton>
-                      <ViewIcon />
-                    </IconButton>
-                  </Tooltip>
-                </TableCell>
+                <TableCell>{device.battery}%</TableCell>
+                <TableCell>{device.lastSeen}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </TableContainer>
-    </Box>
-  );
-};
-
-export default DevicesListPage;
+    </div>
+  )
+}

@@ -1,133 +1,76 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { Card, Title, Paragraph, Button, List, Badge, Avatar } from 'react-native-paper';
-import { useAuth } from '../../hooks/useAuth';
-import { useGeofence } from '../../context/GeofenceContext';
+﻿import React from 'react'
+import { View, StyleSheet, ScrollView } from 'react-native'
+import { Card, Title, Paragraph, Button, List, Badge } from 'react-native-paper'
+import { useGeofence } from '../../context/GeofenceContext'
 
 export default function HomeScreen({ navigation }) {
-  const { user, logout } = useAuth();
-  const { zones, activeAlerts } = useGeofence();
-
-  const handleLogout = async () => {
-    await logout();
-    navigation.replace('Login');
-  };
-
-  const getStatusColor = (count) => {
-    if (count === 0) return '#4CAF50';
-    if (count < 3) return '#FF9800';
-    return '#F44336';
-  };
+  const { zones, activeAlerts } = useGeofence()
 
   return (
     <ScrollView style={styles.container}>
-      <Card style={styles.welcomeCard}>
-        <Card.Title
-          title={`Bonjour, ${user?.email?.split('@')[0] || 'Utilisateur'}`}
-          subtitle={user?.role === 'admin' ? 'Administrateur' : 'Utilisateur'}
-          left={(props) => <Avatar.Icon {...props} icon="account" />}
-        />
+      <Card style={styles.card}>
         <Card.Content>
-          <Paragraph>
-            Bienvenue dans Geofencing Pro. Surveillez vos zones en temps réel.
-          </Paragraph>
+          <Title>Bienvenue sur Geofencing Pro</Title>
+          <Paragraph>Surveillance active de {zones.length} zones</Paragraph>
         </Card.Content>
       </Card>
 
-      <View style={styles.statsContainer}>
-        <Card style={[styles.statCard, { borderLeftColor: getStatusColor(activeAlerts.length) }]}>
+      {activeAlerts.length > 0 && (
+        <Card style={[styles.card, styles.alertCard]}>
+          <Card.Title
+            title="Alertes Actives"
+            left={(props) => <Badge {...props} size={24}>{activeAlerts.length}</Badge>}
+          />
           <Card.Content>
-            <Title>{activeAlerts.length}</Title>
-            <Paragraph>Alertes actives</Paragraph>
+            {activeAlerts.map((alert, index) => (
+              <List.Item
+                key={index}
+                title={alert.zoneName}
+                description={alert.type === 'inside' ? 'Entrée détectée' : 'Sortie détectée'}
+                left={(props) => <List.Icon {...props} icon="alert-circle" color="red" />}
+              />
+            ))}
           </Card.Content>
         </Card>
+      )}
 
-        <Card style={styles.statCard}>
-          <Card.Content>
-            <Title>{zones.length}</Title>
-            <Paragraph>Zones surveillées</Paragraph>
-          </Card.Content>
-        </Card>
-      </View>
-
-      <Card style={styles.menuCard}>
-        <Card.Title title="Navigation rapide" />
+      <Card style={styles.card}>
+        <Card.Title title="Actions Rapides" />
         <Card.Content>
-          <List.Item
-            title="Voir la carte"
-            description="Carte interactive des zones"
-            left={props => <List.Icon {...props} icon="map" />}
+          <Button
+            mode="contained"
             onPress={() => navigation.navigate('Map')}
-          />
-          <List.Item
-            title="Mes zones"
-            description="Liste des zones de geofencing"
-            left={props => <List.Icon {...props} icon="map-marker-radius" />}
+            style={styles.button}
+          >
+            Voir la Carte
+          </Button>
+          <Button
+            mode="outlined"
             onPress={() => navigation.navigate('Zones')}
-          />
-          <List.Item
-            title="Alertes"
-            description="Historique des notifications"
-            left={props => (
-              <View>
-                <List.Icon {...props} icon="bell" />
-                {activeAlerts.length > 0 && (
-                  <Badge style={styles.badge}>{activeAlerts.length}</Badge>
-                )}
-              </View>
-            )}
-            onPress={() => navigation.navigate('Alerts')}
-          />
-          <List.Item
-            title="Paramètres"
-            description="Configuration de l'application"
-            left={props => <List.Icon {...props} icon="cog" />}
-            onPress={() => navigation.navigate('Settings')}
-          />
+            style={styles.button}
+          >
+            Liste des Zones
+          </Button>
         </Card.Content>
       </Card>
-
-      <Button 
-        mode="outlined" 
-        onPress={handleLogout}
-        style={styles.logoutButton}
-        icon="logout"
-      >
-        Déconnexion
-      </Button>
     </ScrollView>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 16,
     backgroundColor: '#f5f5f5',
   },
-  welcomeCard: {
-    margin: 10,
-    elevation: 2,
+  card: {
+    marginBottom: 16,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    padding: 10,
-    gap: 10,
+  alertCard: {
+    borderColor: 'red',
+    borderWidth: 1,
   },
-  statCard: {
-    flex: 1,
-    borderLeftWidth: 4,
+  button: {
+    marginVertical: 8,
   },
-  menuCard: {
-    margin: 10,
-    elevation: 2,
-  },
-  badge: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-  },
-  logoutButton: {
-    margin: 20,
-    marginTop: 10,
-  },
-});
+})

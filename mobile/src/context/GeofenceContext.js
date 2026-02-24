@@ -59,3 +59,12 @@ export const GeofenceProvider = ({ children }) => {
       activeAlerts,
       loading,
       checkZoneStatus,
+      addAlert,
+      clearAlert
+    }}>
+      {children}
+    </GeofenceContext.Provider>
+  );
+};
+
+export const useGeofence = () => useContext(GeofenceContext);

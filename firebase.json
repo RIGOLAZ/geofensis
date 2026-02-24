@@ -16,7 +16,7 @@
     }
   ],
   "hosting": {
-    "target": "admin",
+    "site": "etralis-3ea75",
     "public": "web-admin/dist",
     "ignore": [
       "firebase.json",
