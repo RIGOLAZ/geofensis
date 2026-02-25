@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   List,
   ListItem,
@@ -15,7 +15,7 @@ import {
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
+import { db } from '../../../api/firebase';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 

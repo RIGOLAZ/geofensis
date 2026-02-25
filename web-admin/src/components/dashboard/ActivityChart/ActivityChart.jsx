@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
+import { db } from '../../../api/firebase';
 import { format, subDays, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 

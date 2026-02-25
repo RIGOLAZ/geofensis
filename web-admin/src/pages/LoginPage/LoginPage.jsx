@@ -1,6 +1,6 @@
-﻿import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -9,30 +9,25 @@ import {
   Typography,
   Alert,
   CircularProgress,
-  Avatar,
 } from '@mui/material';
-import { LockOutlined } from '@mui/icons-material';
 import { loginUser, clearError } from '../../store/slices/authSlice';
 
-const LoginPage = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+export default function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { isAuthenticated, loading, error } = useSelector((state) => state.auth);
+  const { loading, error, isAuthenticated } = useSelector((state) => state.auth);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/dashboard');
-    }
-    return () => {
-      dispatch(clearError());
-    };
-  }, [isAuthenticated, navigate, dispatch]);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    dispatch(loginUser({ email, password }));
+    try {
+      await dispatch(loginUser({ email, password })).unwrap();
+      navigate('/dashboard');
+    } catch (err) {
+      // Error géré par le slice
+    }
   };
 
   return (
@@ -42,72 +37,55 @@ const LoginPage = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        bgcolor: 'background.default',
       }}
     >
-      <Paper
-        elevation={10}
-        sx={{
-          p: 4,
-          width: '100%',
-          maxWidth: 400,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Avatar sx={{ m: 1, bgcolor: 'primary.main' }}>
-          <LockOutlined />
-        </Avatar>
-        <Typography component="h1" variant="h5">
+      <Paper elevation={3} sx={{ p: 4, width: '100%', maxWidth: 400 }}>
+        <Typography variant="h4" component="h1" gutterBottom align="center">
           Geofencing Pro
         </Typography>
-        <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-          Administration
+        <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
+          Connexion Administrateur
         </Typography>
 
         {error && (
-          <Alert severity="error" sx={{ width: '100%', mt: 2 }}>
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => dispatch(clearError())}>
             {error}
           </Alert>
         )}
 
-        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3, width: '100%' }}>
+        <Box component="form" onSubmit={handleSubmit}>
           <TextField
-            margin="normal"
-            required
             fullWidth
             label="Email"
             type="email"
-            autoComplete="email"
-            autoFocus
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-          />
-          <TextField
             margin="normal"
             required
+            autoFocus
+          />
+          <TextField
             fullWidth
             label="Mot de passe"
             type="password"
-            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            margin="normal"
+            required
           />
           <Button
             type="submit"
             fullWidth
             variant="contained"
-            sx={{ mt: 3, mb: 2 }}
+            size="large"
+            sx={{ mt: 3 }}
             disabled={loading}
           >
-            {loading ? <CircularProgress size={24} /> : 'Connexion'}
+            {loading ? <CircularProgress size={24} /> : 'Se connecter'}
           </Button>
         </Box>
       </Paper>
     </Box>
   );
-};
-
-export default LoginPage;
-
+}

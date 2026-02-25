@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -11,7 +11,7 @@ import {
   Snackbar
 } from '@mui/material';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
+import { db } from '../../../api/firebase';
 import MapEditor from '../../../components/zones/ZoneEditor/MapEditor';
 
 const ZoneEditPage = () => {

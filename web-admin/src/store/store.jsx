@@ -1,4 +1,4 @@
-import { configureStore } from '@reduxjs/toolkit'
+﻿import { configureStore } from '@reduxjs/toolkit'
 import authReducer from './slices/authSlice'
 import zonesReducer from './slices/zonesSlice'
 import devicesReducer from './slices/devicesSlice'
@@ -14,8 +14,8 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        ignoredActions: ['auth/loginUser/fulfilled', 'zones/fetchZones/fulfilled'],
-        ignoredPaths: ['auth.user.createdAt', 'zones.data.0.createdAt'],
+        ignoredActions: ['zones/setZones', 'devices/setDevices'],
+        ignoredPaths: ['zones.data.createdAt', 'devices.data.lastUpdate'],
       },
     }),
 })

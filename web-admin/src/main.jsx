@@ -1,13 +1,15 @@
-﻿import React from 'react'
+import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
+import { Provider } from 'react-redux'
+import { LocalizationProvider } from '@mui/x-date-pickers'
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
+import { store } from './store/store'
 import App from './App'
 
 const theme = createTheme({
   palette: {
-    mode: 'light',
     primary: { main: '#1976d2' },
     secondary: { main: '#dc004e' },
   },
@@ -15,11 +17,13 @@ const theme = createTheme({
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <Provider store={store}>
       <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <App />
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <CssBaseline />
+          <App />
+        </LocalizationProvider>
       </ThemeProvider>
-    </BrowserRouter>
+    </Provider>
   </React.StrictMode>,
 )
