@@ -1,5 +1,6 @@
 ﻿import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
-import { getDevices, getDeviceStats } from '../../api/devicesApi'
+import { getDevices } from '../../api/devicesApi'
+import { getDeviceStats } from '../../api/deviceStatsApi'  // New import
 
 export const fetchDevices = createAsyncThunk(
   'devices/fetchDevices',

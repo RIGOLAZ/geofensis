@@ -1,4 +1,4 @@
-﻿import {
+import {
   collection,
   doc,
   getDocs,
@@ -16,7 +16,7 @@ import { db } from './firebase'
 
 const ZONES_COLLECTION = 'zones'
 
-// Récupérer toutes les zones
+// Récupérer toutes les zones (données réelles)
 export const getZones = async (activeOnly = false) => {
   try {
     let q = query(collection(db, ZONES_COLLECTION), orderBy('createdAt', 'desc'))
@@ -29,8 +29,8 @@ export const getZones = async (activeOnly = false) => {
     return snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate(),
-      updatedAt: doc.data().updatedAt?.toDate()
+      createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+      updatedAt: doc.data().updatedAt?.toDate?.() || new Date()
     }))
   } catch (error) {
     console.error('Error fetching zones:', error)
@@ -51,8 +51,8 @@ export const getZoneById = async (zoneId) => {
     return {
       id: docSnap.id,
       ...docSnap.data(),
-      createdAt: docSnap.data().createdAt?.toDate(),
-      updatedAt: docSnap.data().updatedAt?.toDate()
+      createdAt: docSnap.data().createdAt?.toDate?.() || new Date(),
+      updatedAt: docSnap.data().updatedAt?.toDate?.() || new Date()
     }
   } catch (error) {
     console.error('Error fetching zone:', error)
@@ -135,8 +135,8 @@ export const subscribeToZones = (callback, activeOnly = false) => {
     const zones = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate(),
-      updatedAt: doc.data().updatedAt?.toDate()
+      createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+      updatedAt: doc.data().updatedAt?.toDate?.() || new Date()
     }))
     callback(zones)
   }, (error) => {
@@ -144,7 +144,7 @@ export const subscribeToZones = (callback, activeOnly = false) => {
   })
 }
 
-// Importer des zones depuis un fichier GeoJSON
+// Importer des zones depuis GeoJSON
 export const importZonesFromGeoJSON = async (geojson) => {
   try {
     const features = geojson.features || []
@@ -156,10 +156,10 @@ export const importZonesFromGeoJSON = async (geojson) => {
         type: feature.geometry.type === 'Point' ? 'circle' : 'polygon',
         description: feature.properties.description || '',
         alertLevel: feature.properties.alertLevel || 'medium',
-        coordinates: feature.geometry.coordinates[0].map(coord => ({
+        coordinates: feature.geometry.coordinates[0]?.map(coord => ({
           lat: coord[1],
           lng: coord[0]
-        })),
+        })) || [],
         center: feature.geometry.type === 'Point' ? {
           lat: feature.geometry.coordinates[1],
           lng: feature.geometry.coordinates[0]
@@ -197,10 +197,10 @@ export const exportZonesToGeoJSON = async () => {
       },
       geometry: zone.type === 'circle' ? {
         type: 'Point',
-        coordinates: [zone.center.lng, zone.center.lat]
+        coordinates: [zone.center?.lng || 0, zone.center?.lat || 0]
       } : {
         type: 'Polygon',
-        coordinates: [zone.coordinates.map(c => [c.lng, c.lat])]
+        coordinates: [zone.coordinates?.map(c => [c.lng, c.lat]) || []]
       }
     }))
     
