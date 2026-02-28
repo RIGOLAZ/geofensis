@@ -1,57 +1,113 @@
-﻿import React, { useState, useCallback, useRef } from 'react';
-import { GoogleMap, useJsApiLoader, DrawingManager, Polygon, Circle } from '@react-google-maps/api';
-import { Box, Paper, Typography, Button, TextField, FormControl, InputLabel, Select, MenuItem, Switch, FormControlLabel, Chip, Stack } from '@mui/material';
-
-const libraries = ['drawing', 'geometry'];
+﻿import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { GoogleMap, DrawingManager, Polygon, Circle } from '@react-google-maps/api';
+import { 
+  Box, 
+  Paper, 
+  Typography, 
+  Button, 
+  TextField, 
+  FormControl, 
+  InputLabel, 
+  Select, 
+  MenuItem, 
+  Switch, 
+  FormControlLabel, 
+  Chip, 
+  Stack,
+  CircularProgress,
+  Alert
+} from '@mui/material';
+import { useGoogleMaps } from '../../../context/GoogleMapsContext';
+import { getAlertColor } from '../../../config/googleMaps';
 
 const MapEditor = ({ onSave, initialZone = null }) => {
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries,
-  });
-
+  const { isLoaded, loadError, google } = useGoogleMaps();
+  
   const [map, setMap] = useState(null);
   const [drawingMode, setDrawingMode] = useState(null);
   const [zoneData, setZoneData] = useState({
-    name: '',
-    type: 'circle',
-    description: '',
-    alertLevel: 'medium',
-    entryMessage: '',
-    exitMessage: '',
-    smsAlert: false,
-    contactPhone: '',
-    soundAlert: true,
-    predictiveAlerts: true,
-    active: true,
-    ...initialZone,
+    name: initialZone?.name || '',
+    type: initialZone?.type || 'circle',
+    description: initialZone?.description || '',
+    alertLevel: initialZone?.alertLevel || 'medium',
+    entryMessage: initialZone?.entryMessage || '',
+    exitMessage: initialZone?.exitMessage || '',
+    smsAlert: initialZone?.smsAlert || false,
+    contactPhone: initialZone?.contactPhone || '',
+    soundAlert: initialZone?.soundAlert !== false,
+    predictiveAlerts: initialZone?.predictiveAlerts !== false,
+    active: initialZone?.active !== false,
   });
-  const [geometry, setGeometry] = useState(null);
+  
+  const [geometry, setGeometry] = useState(() => {
+    if (!initialZone) return null;
+    return {
+      type: initialZone.type,
+      center: initialZone.center,
+      radius: initialZone.radius,
+      coordinates: initialZone.coordinates,
+    };
+  });
+  
   const drawingManagerRef = useRef(null);
+  const overlaysRef = useRef([]);
 
-  const onLoad = useCallback((map) => {
-    setMap(map);
-  }, []);
+  const onLoad = useCallback((mapInstance) => {
+    setMap(mapInstance);
+    
+    if (initialZone) {
+      if (initialZone.type === 'circle' && initialZone.center) {
+        mapInstance.setCenter(initialZone.center);
+        mapInstance.setZoom(15);
+      } else if (initialZone.type === 'polygon' && initialZone.coordinates?.length > 0) {
+        const bounds = new window.google.maps.LatLngBounds();
+        initialZone.coordinates.forEach(coord => bounds.extend(coord));
+        mapInstance.fitBounds(bounds);
+      }
+    }
+  }, [initialZone]);
 
-  const onOverlayComplete = (e) => {
-    const newGeometry = e.overlay;
+  const clearOverlays = () => {
+    overlaysRef.current.forEach(overlay => {
+      if (overlay && overlay.setMap) {
+        overlay.setMap(null);
+      }
+    });
+    overlaysRef.current = [];
+  };
 
-    if (e.type === 'circle') {
-      const center = newGeometry.getCenter();
-      const radius = newGeometry.getRadius();
+  const onOverlayComplete = useCallback((e) => {
+    clearOverlays();
+    
+    if (e.overlay && e.overlay.setMap) {
+      e.overlay.setMap(null);
+    }
+
+    if (e.type === window.google.maps.drawing.OverlayType.CIRCLE) {
+      const center = e.overlay.getCenter();
+      const radius = e.overlay.getRadius();
 
       setGeometry({
         type: 'circle',
         center: { lat: center.lat(), lng: center.lng() },
         radius: radius,
       });
-    } else if (e.type === 'polygon') {
-      const path = newGeometry.getPath();
+    } else if (e.type === window.google.maps.drawing.OverlayType.POLYGON) {
+      const path = e.overlay.getPath();
       const coordinates = [];
 
       for (let i = 0; i < path.getLength(); i++) {
         const point = path.getAt(i);
         coordinates.push({ lat: point.lat(), lng: point.lng() });
+      }
+
+      // Fermer le polygone
+      if (coordinates.length > 0) {
+        const first = coordinates[0];
+        const last = coordinates[coordinates.length - 1];
+        if (first.lat !== last.lat || first.lng !== last.lng) {
+          coordinates.push({ ...first });
+        }
       }
 
       setGeometry({
@@ -61,6 +117,25 @@ const MapEditor = ({ onSave, initialZone = null }) => {
     }
 
     setDrawingMode(null);
+    if (drawingManagerRef.current) {
+      drawingManagerRef.current.setDrawingMode(null);
+    }
+  }, []);
+
+  const handleDrawingModeChange = (mode) => {
+    const newMode = drawingMode === mode ? null : mode;
+    setDrawingMode(newMode);
+    
+    if (drawingManagerRef.current && window.google?.maps?.drawing) {
+      drawingManagerRef.current.setDrawingMode(
+        newMode ? window.google.maps.drawing.OverlayType[newMode.toUpperCase()] : null
+      );
+    }
+    
+    if (newMode && geometry) {
+      setGeometry(null);
+      clearOverlays();
+    }
   };
 
   const handleSave = () => {
@@ -69,20 +144,56 @@ const MapEditor = ({ onSave, initialZone = null }) => {
       return;
     }
 
+    if (!zoneData.name.trim()) {
+      alert('Veuillez donner un nom à la zone');
+      return;
+    }
+
     onSave({
       ...zoneData,
       ...geometry,
-      createdAt: new Date(),
       updatedAt: new Date(),
+      createdAt: initialZone?.createdAt || new Date(),
     });
   };
 
-  if (!isLoaded) return <div>Chargement...</div>;
+  const onDrawingManagerLoad = useCallback((drawingManager) => {
+    drawingManagerRef.current = drawingManager;
+  }, []);
+
+  // Gestion des états de chargement
+  if (loadError) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Alert severity="error" sx={{ maxWidth: 500 }}>
+          <Typography variant="h6" gutterBottom>Erreur Google Maps</Typography>
+          <Typography>{loadError.message}</Typography>
+          <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+            Vérifiez votre clé API et la connexion internet.
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
+
+  if (!isLoaded || !window.google?.maps?.drawing) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', gap: 2 }}>
+        <CircularProgress size={60} />
+        <Typography variant="h6" color="textSecondary">
+          Chargement de la carte...
+        </Typography>
+      </Box>
+    );
+  }
+
+  const alertColor = getAlertColor(zoneData.alertLevel);
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
-      <Paper sx={{ width: 400, p: 3, overflow: 'auto' }}>
-        <Typography variant="h5" gutterBottom>
+      {/* Panneau latéral */}
+      <Paper sx={{ width: 400, p: 3, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <Typography variant="h5" gutterBottom fontWeight="bold">
           {initialZone ? 'Modifier la Zone' : 'Nouvelle Zone'}
         </Typography>
 
@@ -93,6 +204,8 @@ const MapEditor = ({ onSave, initialZone = null }) => {
           onChange={(e) => setZoneData({ ...zoneData, name: e.target.value })}
           margin="normal"
           required
+          error={!zoneData.name.trim()}
+          helperText={!zoneData.name.trim() ? 'Champ requis' : ''}
         />
 
         <TextField
@@ -110,6 +223,7 @@ const MapEditor = ({ onSave, initialZone = null }) => {
           <Select
             value={zoneData.alertLevel}
             onChange={(e) => setZoneData({ ...zoneData, alertLevel: e.target.value })}
+            label="Niveau d'alerte"
           >
             <MenuItem value="low">Faible (Vert)</MenuItem>
             <MenuItem value="medium">Moyen (Orange)</MenuItem>
@@ -118,16 +232,17 @@ const MapEditor = ({ onSave, initialZone = null }) => {
         </FormControl>
 
         <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Messages personnalisÃ©s
+          <Typography variant="subtitle2" gutterBottom fontWeight="medium">
+            Messages personnalisés
           </Typography>
           <TextField
             fullWidth
-            label="Message d'entrÃ©e"
+            label="Message d'entrée"
             value={zoneData.entryMessage}
             onChange={(e) => setZoneData({ ...zoneData, entryMessage: e.target.value })}
             margin="dense"
-            placeholder="Vous entrez dans une zone sÃ©curisÃ©e"
+            placeholder="Vous entrez dans une zone sécurisée"
+            size="small"
           />
           <TextField
             fullWidth
@@ -136,6 +251,7 @@ const MapEditor = ({ onSave, initialZone = null }) => {
             onChange={(e) => setZoneData({ ...zoneData, exitMessage: e.target.value })}
             margin="dense"
             placeholder="Vous quittez la zone"
+            size="small"
           />
         </Box>
 
@@ -153,10 +269,12 @@ const MapEditor = ({ onSave, initialZone = null }) => {
           {zoneData.smsAlert && (
             <TextField
               fullWidth
-              label="NumÃ©ro de contact"
+              label="Numéro de contact"
               value={zoneData.contactPhone}
               onChange={(e) => setZoneData({ ...zoneData, contactPhone: e.target.value })}
               margin="normal"
+              placeholder="+33612345678"
+              size="small"
             />
           )}
         </Box>
@@ -178,7 +296,7 @@ const MapEditor = ({ onSave, initialZone = null }) => {
               onChange={(e) => setZoneData({ ...zoneData, predictiveAlerts: e.target.checked })}
             />
           }
-          label="Alertes prÃ©dictives (30s avant)"
+          label="Alertes prédictives (30s avant)"
         />
 
         <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
@@ -187,43 +305,70 @@ const MapEditor = ({ onSave, initialZone = null }) => {
             color="primary"
             onClick={handleSave}
             fullWidth
-            disabled={!geometry}
+            disabled={!geometry || !zoneData.name.trim()}
+            size="large"
           >
-            Sauvegarder
+            {initialZone ? 'Mettre à jour' : 'Sauvegarder'}
           </Button>
         </Stack>
 
-        <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-          <Button
-            variant={drawingMode === 'circle' ? 'contained' : 'outlined'}
-            onClick={() => setDrawingMode(drawingMode === 'circle' ? null : 'circle')}
-            size="small"
-          >
-            Cercle
-          </Button>
-          <Button
-            variant={drawingMode === 'polygon' ? 'contained' : 'outlined'}
-            onClick={() => setDrawingMode(drawingMode === 'polygon' ? null : 'polygon')}
-            size="small"
-          >
-            Polygone
-          </Button>
-        </Stack>
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            Outils de dessin
+          </Typography>
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant={drawingMode === 'circle' ? 'contained' : 'outlined'}
+              onClick={() => handleDrawingModeChange('circle')}
+              size="small"
+              color={drawingMode === 'circle' ? 'primary' : 'inherit'}
+            >
+              Cercle
+            </Button>
+            <Button
+              variant={drawingMode === 'polygon' ? 'contained' : 'outlined'}
+              onClick={() => handleDrawingModeChange('polygon')}
+              size="small"
+              color={drawingMode === 'polygon' ? 'primary' : 'inherit'}
+            >
+              Polygone
+            </Button>
+            {geometry && (
+              <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                onClick={() => {
+                  setGeometry(null);
+                  clearOverlays();
+                  setDrawingMode(null);
+                  if (drawingManagerRef.current) {
+                    drawingManagerRef.current.setDrawingMode(null);
+                  }
+                }}
+              >
+                Effacer
+              </Button>
+            )}
+          </Stack>
+        </Box>
 
         {geometry && (
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
             <Chip
-              label={`Type: ${geometry.type}`}
+              label={`Type: ${geometry.type === 'circle' ? 'Cercle' : 'Polygone'}`}
               color="success"
               variant="outlined"
+              size="small"
+              sx={{ mb: 1 }}
             />
             {geometry.type === 'circle' && (
-              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+              <Typography variant="body2" color="textSecondary">
                 Rayon: {(geometry.radius / 1000).toFixed(2)} km
               </Typography>
             )}
             {geometry.type === 'polygon' && (
-              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+              <Typography variant="body2" color="textSecondary">
                 Points: {geometry.coordinates.length}
               </Typography>
             )}
@@ -231,37 +376,47 @@ const MapEditor = ({ onSave, initialZone = null }) => {
         )}
       </Paper>
 
-      <Box sx={{ flex: 1 }}>
+      {/* Carte */}
+      <Box sx={{ flex: 1, position: 'relative' }}>
         <GoogleMap
           mapContainerStyle={{ width: '100%', height: '100%' }}
-          center={{ lat: 48.8566, lng: 2.3522 }}
-          zoom={13}
+          center={initialZone?.center || { lat: 48.8566, lng: 2.3522 }}
+          zoom={initialZone ? 15 : 13}
           onLoad={onLoad}
           options={{
             mapTypeId: 'hybrid',
-            drawingControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
+            mapTypeControl: true,
+            mapTypeControlOptions: {
+              position: window.google.maps.ControlPosition.TOP_RIGHT,
+            },
           }}
         >
           <DrawingManager
-            onLoad={(ref) => (drawingManagerRef.current = ref)}
+            onLoad={onDrawingManagerLoad}
             onOverlayComplete={onOverlayComplete}
             options={{
               drawingControl: false,
-              drawingMode: drawingMode,
+              drawingMode: drawingMode ? window.google.maps.drawing.OverlayType[drawingMode.toUpperCase()] : null,
               circleOptions: {
-                fillColor: '#2196f3',
+                fillColor: alertColor,
                 fillOpacity: 0.3,
                 strokeWeight: 2,
+                strokeColor: alertColor,
                 clickable: false,
                 editable: true,
+                draggable: true,
                 zIndex: 1,
               },
               polygonOptions: {
-                fillColor: '#2196f3',
+                fillColor: alertColor,
                 fillOpacity: 0.3,
                 strokeWeight: 2,
+                strokeColor: alertColor,
                 clickable: false,
                 editable: true,
+                draggable: true,
                 zIndex: 1,
               },
             }}
@@ -272,9 +427,28 @@ const MapEditor = ({ onSave, initialZone = null }) => {
               center={geometry.center}
               radius={geometry.radius}
               options={{
-                fillColor: '#ff0000',
+                fillColor: alertColor,
                 fillOpacity: 0.3,
-                strokeColor: '#ff0000',
+                strokeColor: alertColor,
+                strokeWeight: 2,
+                editable: true,
+                draggable: true,
+              }}
+              onLoad={(circle) => {
+                overlaysRef.current.push(circle);
+                
+                const updateCircle = () => {
+                  const center = circle.getCenter();
+                  const radius = circle.getRadius();
+                  setGeometry(prev => ({
+                    ...prev,
+                    center: { lat: center.lat(), lng: center.lng() },
+                    radius: radius,
+                  }));
+                };
+
+                window.google.maps.event.addListener(circle, 'radius_changed', updateCircle);
+                window.google.maps.event.addListener(circle, 'center_changed', updateCircle);
               }}
             />
           )}
@@ -283,9 +457,32 @@ const MapEditor = ({ onSave, initialZone = null }) => {
             <Polygon
               paths={geometry.coordinates}
               options={{
-                fillColor: '#ff0000',
+                fillColor: alertColor,
                 fillOpacity: 0.3,
-                strokeColor: '#ff0000',
+                strokeColor: alertColor,
+                strokeWeight: 2,
+                editable: true,
+                draggable: true,
+              }}
+              onLoad={(polygon) => {
+                overlaysRef.current.push(polygon);
+                
+                const updatePolygon = () => {
+                  const path = polygon.getPath();
+                  const coords = [];
+                  for (let i = 0; i < path.getLength(); i++) {
+                    const point = path.getAt(i);
+                    coords.push({ lat: point.lat(), lng: point.lng() });
+                  }
+                  setGeometry(prev => ({
+                    ...prev,
+                    coordinates: coords,
+                  }));
+                };
+
+                window.google.maps.event.addListener(polygon.getPath(), 'set_at', updatePolygon);
+                window.google.maps.event.addListener(polygon.getPath(), 'insert_at', updatePolygon);
+                window.google.maps.event.addListener(polygon.getPath(), 'remove_at', updatePolygon);
               }}
             />
           )}

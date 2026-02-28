@@ -69,7 +69,7 @@ export default function ZoneCreatePage() {
       await createZone(zoneData)
       navigate('/zones')
     } catch (err) {
-      setError('Erreur lors de la crÃ©ation: ' + err.message)
+      setError('Erreur lors de la création: ' + err.message)
       setLoading(false)
     }
   }
@@ -126,11 +126,11 @@ export default function ZoneCreatePage() {
             </FormControl>
             <TextField
               fullWidth
-              label="Message d'entrÃ©e"
+              label="Message d'entrée"
               value={zoneData.entryMessage}
               onChange={(e) => setZoneData({ ...zoneData, entryMessage: e.target.value })}
               margin="normal"
-              placeholder="Vous entrez dans une zone sÃ©curisÃ©e"
+              placeholder="Vous entrez dans une zone sécurisée"
             />
             <TextField
               fullWidth
@@ -156,7 +156,7 @@ export default function ZoneCreatePage() {
       case 2:
         return (
           <Box sx={{ mt: 2 }}>
-            <Typography variant="h6">RÃ©capitulatif</Typography>
+            <Typography variant="h6">Récapitulatif</Typography>
             <Typography><strong>Nom:</strong> {zoneData.name}</Typography>
             <Typography><strong>Type:</strong> {zoneData.type === 'circle' ? 'Cercle' : 'Polygone'}</Typography>
             <Typography><strong>Niveau d'alerte:</strong> {zoneData.alertLevel}</Typography>
@@ -182,7 +182,7 @@ export default function ZoneCreatePage() {
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
-        CrÃ©er une Zone
+        Créer une Zone
       </Typography>
 
       {error && (
