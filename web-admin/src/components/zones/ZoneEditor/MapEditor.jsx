@@ -1,7 +1,8 @@
 ﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Paper, Typography, Button, TextField, FormControl, InputLabel, Select, MenuItem,
-  Switch, FormControlLabel, Chip, Stack, CircularProgress, Alert, ToggleButton, ToggleButtonGroup
+  Switch, FormControlLabel, Chip, Stack, CircularProgress, Alert, ToggleButton, ToggleButtonGroup,
+  Stepper, Step, StepLabel
 } from '@mui/material';
 import { Circle as CircleIcon, Pentagon as PolygonIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useGoogleMaps } from '../../../context/GoogleMapsContext';
@@ -11,16 +12,18 @@ const MapEditor = ({ onSave, initialZone = null }) => {
   
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
-  const drawingRef = useRef({
-    markers: [],
-    shapes: [],
-    tempPolyline: null,
-    clickListener: null,
-  });
   
+  const polygonPointsRef = useRef([]);
+  const markersRef = useRef([]);
+  const shapesRef = useRef([]);
+  const tempPolylineRef = useRef(null);
+  const clickListenerRef = useRef(null);
+  const circleCenterRef = useRef(null);
+  
+  const [activeStep, setActiveStep] = useState(0);
   const [drawingMode, setDrawingMode] = useState(null);
   const [geometry, setGeometry] = useState(null);
-  const [polygonPoints, setPolygonPoints] = useState([]); // ✅ Renommé pour clarté
+  const [pointCount, setPointCount] = useState(0);
   const [circleStep, setCircleStep] = useState(0);
   
   const [zoneData, setZoneData] = useState({
@@ -46,64 +49,88 @@ const MapEditor = ({ onSave, initialZone = null }) => {
     }
   }, []);
 
-  // Initialiser la carte
+  // ✅ Initialiser la carte quand on passe à l'étape 2 OU si édition
   useEffect(() => {
-    if (!isLoaded || !google?.maps?.Map || !mapRef.current || mapInstanceRef.current) return;
-
-    const map = new google.maps.Map(mapRef.current, {
-      center: initialZone?.center || { lat: 48.8566, lng: 2.3522 },
-      zoom: initialZone ? 15 : 13,
-      mapTypeId: 'hybrid',
-      streetViewControl: false,
-      fullscreenControl: false,
-      mapTypeControl: true,
-      mapTypeControlOptions: {
-        position: google.maps.ControlPosition.TOP_RIGHT,
-      },
-    });
+    if (!isLoaded || !google?.maps?.Map) return;
     
-    mapInstanceRef.current = map;
+    // Si on est à l'étape 1 et pas en édition, ne pas créer la carte encore
+    if (activeStep === 0 && !initialZone) return;
+    
+    // Si la carte existe déjà, ne pas la recréer
+    if (mapInstanceRef.current) return;
+    
+    // Attendre que le DOM soit prêt
+    setTimeout(() => {
+      if (!mapRef.current) {
+        console.error('mapRef.current est null!');
+        return;
+      }
 
-    if (initialZone) {
-      displayExistingZone(initialZone, map);
-    }
+      console.log('🗺️ Création de la carte...');
+      
+      const map = new google.maps.Map(mapRef.current, {
+        center: initialZone?.center || { lat: 48.8566, lng: 2.3522 },
+        zoom: initialZone ? 15 : 13,
+        mapTypeId: 'hybrid',
+        streetViewControl: false,
+        fullscreenControl: false,
+        mapTypeControl: true,
+        mapTypeControlOptions: {
+          position: google.maps.ControlPosition.TOP_RIGHT,
+        },
+      });
+      
+      mapInstanceRef.current = map;
 
-    return () => cleanup();
-  }, [isLoaded, google, initialZone, getAlertColor]);
+      if (initialZone) {
+        displayExistingZone(initialZone, map);
+      }
+    }, 100);
+
+    return () => {
+      // Cleanup uniquement si on quitte complètement le composant
+      // Pas si on change d'étape
+    };
+  }, [isLoaded, google, activeStep, initialZone]); // ✅ Dépend de activeStep
 
   const cleanup = () => {
-    if (drawingRef.current.clickListener) {
-      google.maps.event.removeListener(drawingRef.current.clickListener);
+    if (clickListenerRef.current) {
+      google.maps.event.removeListener(clickListenerRef.current);
     }
-    drawingRef.current.markers.forEach(m => m.setMap?.(null));
-    drawingRef.current.shapes.forEach(s => s.setMap?.(null));
-    if (drawingRef.current.tempPolyline) {
-      drawingRef.current.tempPolyline.setMap(null);
+    markersRef.current.forEach(m => m.setMap?.(null));
+    shapesRef.current.forEach(s => s.setMap?.(null));
+    if (tempPolylineRef.current) {
+      tempPolylineRef.current.setMap(null);
     }
-    drawingRef.current = { markers: [], shapes: [], tempPolyline: null, clickListener: null };
     mapInstanceRef.current = null;
   };
 
+  // ✅ Cleanup complet quand le composant est détruit
+  useEffect(() => {
+    return () => cleanup();
+  }, []);
+
   const clearDrawing = useCallback(() => {
-    if (drawingRef.current.clickListener) {
-      google.maps.event.removeListener(drawingRef.current.clickListener);
-      drawingRef.current.clickListener = null;
+    if (clickListenerRef.current) {
+      google.maps.event.removeListener(clickListenerRef.current);
+      clickListenerRef.current = null;
     }
     
-    drawingRef.current.markers.forEach(m => m.setMap?.(null));
-    drawingRef.current.shapes.forEach(s => s.setMap?.(null));
-    if (drawingRef.current.tempPolyline) {
-      drawingRef.current.tempPolyline.setMap(null);
+    markersRef.current.forEach(m => m.setMap?.(null));
+    shapesRef.current.forEach(s => s.setMap?.(null));
+    if (tempPolylineRef.current) {
+      tempPolylineRef.current.setMap(null);
     }
     
-    drawingRef.current.markers = [];
-    drawingRef.current.shapes = [];
-    drawingRef.current.tempPolyline = null;
+    markersRef.current = [];
+    shapesRef.current = [];
+    tempPolylineRef.current = null;
+    polygonPointsRef.current = [];
+    circleCenterRef.current = null;
     
     setGeometry(null);
-    setPolygonPoints([]); // ✅ Reset ici
+    setPointCount(0);
     setCircleStep(0);
-    setDrawingMode(null);
   }, [google]);
 
   const displayExistingZone = useCallback((zone, map) => {
@@ -122,17 +149,16 @@ const MapEditor = ({ onSave, initialZone = null }) => {
         draggable: true,
       });
       
-      drawingRef.current.shapes.push(circle);
+      shapesRef.current.push(circle);
       setGeometry({ type: 'circle', center: zone.center, radius: zone.radius, instance: circle });
-      setCircleStep(2);
       
       circle.addListener('radius_changed', () => {
-        setGeometry(prev => ({ ...prev, radius: circle.getRadius() }));
+        setGeometry(prev => prev ? { ...prev, radius: circle.getRadius() } : null);
       });
       
       circle.addListener('center_changed', () => {
         const c = circle.getCenter();
-        setGeometry(prev => ({ ...prev, center: { lat: c.lat(), lng: c.lng() } }));
+        setGeometry(prev => prev ? { ...prev, center: { lat: c.lat(), lng: c.lng() } } : null);
       });
       
     } else if (zone.type === 'polygon' && zone.coordinates?.length > 0) {
@@ -147,46 +173,28 @@ const MapEditor = ({ onSave, initialZone = null }) => {
         draggable: true,
       });
       
-      drawingRef.current.shapes.push(polygon);
+      shapesRef.current.push(polygon);
       setGeometry({ type: 'polygon', coordinates: zone.coordinates, instance: polygon });
     }
   }, [getAlertColor, google]);
 
-  // Gérer le changement de mode de dessin
   useEffect(() => {
     if (!mapInstanceRef.current || !google) return;
     
-    if (drawingRef.current.clickListener) {
-      google.maps.event.removeListener(drawingRef.current.clickListener);
-      drawingRef.current.clickListener = null;
+    if (clickListenerRef.current) {
+      google.maps.event.removeListener(clickListenerRef.current);
+      clickListenerRef.current = null;
     }
 
     if (!drawingMode) return;
 
-    console.log(`✏️ Mode: ${drawingMode}`);
-
-    // ✅ NOUVEAU: Désactiver les contrôles de carte pendant le dessin
-    mapInstanceRef.current.setOptions({
-      draggable: false,
-      zoomControl: false,
-      scrollwheel: false,
-    });
+    clearDrawing();
     
-    drawingRef.current.clickListener = mapInstanceRef.current.addListener('click', (e) => {
+    clickListenerRef.current = mapInstanceRef.current.addListener('click', (e) => {
       handleMapClick(e);
     });
 
-    return () => {
-      // Réactiver les contrôles quand on quitte le mode
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.setOptions({
-          draggable: true,
-          zoomControl: true,
-          scrollwheel: true,
-        });
-      }
-    };
-  }, [drawingMode, google]);
+  }, [drawingMode, google, clearDrawing]);
 
   const handleMapClick = useCallback((e) => {
     if (!drawingMode || !mapInstanceRef.current) return;
@@ -195,48 +203,47 @@ const MapEditor = ({ onSave, initialZone = null }) => {
     const lng = e.latLng.lng();
     const color = getAlertColor(zoneData.alertLevel);
 
-    console.log(`🖱️ Click ${drawingMode}:`, lat, lng);
-
     if (drawingMode === 'circle') {
       handleCircleClick(lat, lng, color);
     } else if (drawingMode === 'polygon') {
       handlePolygonClick(lat, lng, color);
     }
-  }, [drawingMode, zoneData.alertLevel, getAlertColor, geometry, polygonPoints, circleStep]);
+  }, [drawingMode, zoneData.alertLevel, getAlertColor, circleStep]);
 
   const handleCircleClick = (lat, lng, color) => {
     if (circleStep === 0) {
-      console.log('⭕ Étape 1: Centre');
+      markersRef.current.forEach(m => m.setMap(null));
+      markersRef.current = [];
       
-      const marker = new google.maps.Marker({
+      const marker = google.maps.marker.AdvancedMarkerElement({
         position: { lat, lng },
         map: mapInstanceRef.current,
-        label: 'C',
+        title: 'Centre',
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
-          scale: 10,
+          scale: 12,
           fillColor: color,
           fillOpacity: 1,
           strokeColor: '#fff',
-          strokeWeight: 2,
+          strokeWeight: 3,
         }
       });
       
-      drawingRef.current.markers.push(marker);
-      setGeometry({ type: 'circle_temp', center: { lat, lng } });
+      markersRef.current.push(marker);
+      circleCenterRef.current = { lat, lng };
       setCircleStep(1);
       
-    } else if (circleStep === 1 && geometry?.center) {
-      console.log('⭕ Étape 2: Rayon');
+    } else if (circleStep === 1) {
+      const center = circleCenterRef.current;
+      if (!center) return;
       
-      const center = geometry.center;
       const radius = google.maps.geometry.spherical.computeDistanceBetween(
         new google.maps.LatLng(center.lat, center.lng),
         new google.maps.LatLng(lat, lng)
       );
       
-      drawingRef.current.markers.forEach(m => m.setMap(null));
-      drawingRef.current.markers = [];
+      markersRef.current.forEach(m => m.setMap(null));
+      markersRef.current = [];
       
       const circle = new google.maps.Circle({
         map: mapInstanceRef.current,
@@ -250,42 +257,34 @@ const MapEditor = ({ onSave, initialZone = null }) => {
         draggable: true,
       });
       
-      drawingRef.current.shapes.push(circle);
+      shapesRef.current.push(circle);
       setGeometry({ type: 'circle', center, radius, instance: circle });
-      setCircleStep(2);
+      setCircleStep(0);
       setDrawingMode(null);
       
       circle.addListener('radius_changed', () => {
-        setGeometry(prev => ({ ...prev, radius: circle.getRadius() }));
+        setGeometry(prev => prev ? { ...prev, radius: circle.getRadius() } : null);
       });
       
       circle.addListener('center_changed', () => {
         const c = circle.getCenter();
-        setGeometry(prev => ({ ...prev, center: { lat: c.lat(), lng: c.lng() } }));
+        setGeometry(prev => prev ? { ...prev, center: { lat: c.lat(), lng: c.lng() } } : null);
       });
     }
   };
 
-  // ✅ CORRECTION: Fonction handlePolygonClick corrigée
   const handlePolygonClick = (lat, lng, color) => {
-    console.log('📍 Ajout point polygon:', lat, lng);
-    
-    // ✅ Utiliser la valeur actuelle des points, pas l'état React qui peut être stale
-    const currentPoints = polygonPoints;
     const newPoint = { lat, lng };
-    const updatedPoints = [...currentPoints, newPoint];
+    polygonPointsRef.current.push(newPoint);
+    const currentCount = polygonPointsRef.current.length;
     
-    console.log('📊 Total points:', updatedPoints.length);
+    setPointCount(currentCount);
     
-    // Mettre à jour l'état React
-    setPolygonPoints(updatedPoints);
-    
-    // Ajouter marker
-    const marker = new google.maps.Marker({
+    const marker = google.maps.marker.AdvancedMarkerElement({
       position: newPoint,
       map: mapInstanceRef.current,
       label: {
-        text: String(updatedPoints.length),
+        text: String(currentCount),
         color: 'white',
       },
       icon: {
@@ -297,41 +296,38 @@ const MapEditor = ({ onSave, initialZone = null }) => {
         strokeWeight: 2,
       }
     });
-    drawingRef.current.markers.push(marker);
+    markersRef.current.push(marker);
     
-    // Mettre à jour ou créer la polyligne
-    if (drawingRef.current.tempPolyline) {
-      drawingRef.current.tempPolyline.setPath(updatedPoints);
+    if (tempPolylineRef.current) {
+      tempPolylineRef.current.setPath(polygonPointsRef.current);
     } else {
-      drawingRef.current.tempPolyline = new google.maps.Polyline({
-        path: updatedPoints,
+      tempPolylineRef.current = new google.maps.Polyline({
+        path: polygonPointsRef.current,
         map: mapInstanceRef.current,
         strokeColor: '#2196f3',
         strokeOpacity: 1,
         strokeWeight: 3,
-        geodesic: true,
       });
     }
   };
 
-  // ✅ CORRECTION: Utiliser polygonPoints.length directement
   const finalizePolygon = useCallback(() => {
-    console.log('🔷 Finalisation, points:', polygonPoints.length);
+    const points = polygonPointsRef.current;
     
-    if (polygonPoints.length < 3) {
-      alert(`Minimum 3 points requis. Actuellement: ${polygonPoints.length} point(s)`);
+    if (points.length < 3) {
+      alert(`Minimum 3 points requis. Actuellement: ${points.length}`);
       return;
     }
     
     const color = getAlertColor(zoneData.alertLevel);
-    const coords = [...polygonPoints, polygonPoints[0]]; // Fermer
+    const coords = [...points, points[0]];
     
-    drawingRef.current.markers.forEach(m => m.setMap(null));
-    drawingRef.current.markers = [];
+    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current = [];
     
-    if (drawingRef.current.tempPolyline) {
-      drawingRef.current.tempPolyline.setMap(null);
-      drawingRef.current.tempPolyline = null;
+    if (tempPolylineRef.current) {
+      tempPolylineRef.current.setMap(null);
+      tempPolylineRef.current = null;
     }
     
     const polygon = new google.maps.Polygon({
@@ -345,35 +341,46 @@ const MapEditor = ({ onSave, initialZone = null }) => {
       draggable: true,
     });
     
-    drawingRef.current.shapes.push(polygon);
+    shapesRef.current.push(polygon);
     setGeometry({ type: 'polygon', coordinates: coords, instance: polygon });
-    setPolygonPoints([]); // Reset
+    polygonPointsRef.current = [];
+    setPointCount(0);
     setDrawingMode(null);
-  }, [polygonPoints, zoneData.alertLevel, getAlertColor]);
+  }, [zoneData.alertLevel, getAlertColor]);
 
   const handleSave = () => {
-    if (!geometry) {
-      alert('Veuillez dessiner une zone');
-      return;
-    }
-    if (!zoneData.name.trim()) {
-      alert('Nom requis');
-      return;
-    }
+  if (!geometry) {
+    alert('Veuillez dessiner une zone sur la carte');
+    return;
+  }
 
-    const data = {
-      ...zoneData,
-      type: geometry.type,
-      ...(geometry.type === 'circle' 
-        ? { center: geometry.center, radius: geometry.radius }
-        : { coordinates: geometry.coordinates }
-      ),
-      updatedAt: new Date(),
-      createdAt: initialZone?.createdAt || new Date(),
-    };
+  if (!zoneData.name.trim()) {
+    alert('Veuillez donner un nom à la zone');
+    return;
+  }
 
-    onSave(data);
+  const data = {
+    ...zoneData,
+    type: geometry.type,
+    ...(geometry.type === 'circle' 
+      ? { center: geometry.center, radius: geometry.radius }
+      : { coordinates: geometry.coordinates }
+    ),
+    updatedAt: new Date(),
+    createdAt: initialZone?.createdAt || new Date(),
   };
+
+  // ✅ VÉRIFICATION onSave
+  if (typeof onSave !== 'function') {
+    console.error('❌ onSave n\'est pas une fonction!', onSave);
+    alert('Erreur: Fonction de sauvegarde non définie');
+    return;
+  }
+
+  onSave(data);
+};
+
+  const steps = ['Informations', 'Dessin sur la carte'];
 
   if (loadError) {
     return (
@@ -392,116 +399,177 @@ const MapEditor = ({ onSave, initialZone = null }) => {
   }
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh' }}>
-      <Paper sx={{ width: 400, p: 3, overflow: 'auto', zIndex: 10 }}>
-        <Typography variant="h5" gutterBottom>{initialZone ? 'Modifier' : 'Nouvelle'} Zone</Typography>
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* ✅ UN SEUL STEPPER */}
+      <Stepper activeStep={activeStep} sx={{ p: 2, bgcolor: 'background.paper' }}>
+        {steps.map((label) => (
+          <Step key={label}>
+            <StepLabel>{label}</StepLabel>
+          </Step>
+        ))}
+      </Stepper>
 
-        <TextField fullWidth label="Nom" value={zoneData.name} 
-          onChange={(e) => setZoneData({ ...zoneData, name: e.target.value })} 
-          margin="normal" required error={!zoneData.name.trim()} />
-
-        <TextField fullWidth label="Description" multiline rows={3} 
-          value={zoneData.description} onChange={(e) => setZoneData({ ...zoneData, description: e.target.value })} 
-          margin="normal" />
-
-        <FormControl fullWidth margin="normal">
-          <InputLabel>Niveau d'alerte</InputLabel>
-          <Select value={zoneData.alertLevel} onChange={(e) => setZoneData({ ...zoneData, alertLevel: e.target.value })}>
-            <MenuItem value="low">Faible (Vert)</MenuItem>
-            <MenuItem value="medium">Moyen (Orange)</MenuItem>
-            <MenuItem value="high">Critique (Rouge)</MenuItem>
-          </Select>
-        </FormControl>
-
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle2">Messages</Typography>
-          <TextField fullWidth label="Entrée" value={zoneData.entryMessage} 
-            onChange={(e) => setZoneData({ ...zoneData, entryMessage: e.target.value })} margin="dense" />
-          <TextField fullWidth label="Sortie" value={zoneData.exitMessage} 
-            onChange={(e) => setZoneData({ ...zoneData, exitMessage: e.target.value })} margin="dense" />
-        </Box>
-
-        <FormControlLabel control={<Switch checked={zoneData.smsAlert} onChange={(e) => setZoneData({ ...zoneData, smsAlert: e.target.checked })} />} label="Alerte SMS" />
-        {zoneData.smsAlert && <TextField fullWidth label="Téléphone" value={zoneData.contactPhone} onChange={(e) => setZoneData({ ...zoneData, contactPhone: e.target.value })} margin="normal" />}
-        
-        <FormControlLabel control={<Switch checked={zoneData.soundAlert} onChange={(e) => setZoneData({ ...zoneData, soundAlert: e.target.checked })} />} label="Alerte sonore" />
-        <FormControlLabel control={<Switch checked={zoneData.predictiveAlerts} onChange={(e) => setZoneData({ ...zoneData, predictiveAlerts: e.target.checked })} />} label="Prédictive (30s)" />
-
-        <Box sx={{ mt: 3 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            {!drawingMode && 'Outils de dessin'}
-            {drawingMode === 'circle' && circleStep === 0 && '⭕ Cliquez pour le CENTRE'}
-            {drawingMode === 'circle' && circleStep === 1 && '⭕ Cliquez pour le RAYON'}
-            {drawingMode === 'polygon' && `📍 Cliquez pour ajouter (${polygonPoints.length} point${polygonPoints.length > 1 ? 's' : ''})`}
-          </Typography>
+      {activeStep === 0 ? (
+        // ÉTAPE 1: Formulaire
+        <Paper sx={{ flex: 1, p: 3, overflow: 'auto', maxWidth: 600, mx: 'auto', mt: 2 }}>
+          <Typography variant="h5" gutterBottom>Nouvelle Zone</Typography>
           
-          <ToggleButtonGroup 
-            value={drawingMode} 
-            exclusive 
-            onChange={(e, m) => {
-              if (m !== null) {
-                clearDrawing();
-                setDrawingMode(m);
-              }
-            }} 
-            fullWidth 
-            size="small"
-            disabled={!!geometry}
-          >
-            <ToggleButton value="circle">
-              <CircleIcon sx={{ mr: 1 }} />
-              Cercle
-            </ToggleButton>
-            <ToggleButton value="polygon">
-              <PolygonIcon sx={{ mr: 1 }} />
-              Polygone
-            </ToggleButton>
-          </ToggleButtonGroup>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Remplissez les informations puis passez à l'étape de dessin
+          </Alert>
 
-          {drawingMode === 'polygon' && polygonPoints.length > 0 && (
-            <Button 
-              variant="contained" 
-              color="success" 
-              fullWidth 
-              sx={{ mt: 1 }} 
-              onClick={finalizePolygon}
-            >
-              Finaliser ({polygonPoints.length} point{polygonPoints.length > 1 ? 's' : ''})
-            </Button>
-          )}
+          <TextField fullWidth label="Nom *" value={zoneData.name} 
+            onChange={(e) => setZoneData({ ...zoneData, name: e.target.value })} 
+            margin="normal" required error={!zoneData.name.trim()} />
 
-          {geometry && (
-            <Button variant="outlined" color="error" fullWidth sx={{ mt: 1 }} startIcon={<DeleteIcon />} onClick={clearDrawing}>
-              Effacer
-            </Button>
-          )}
-        </Box>
+          <TextField fullWidth label="Description" multiline rows={3} 
+            value={zoneData.description} onChange={(e) => setZoneData({ ...zoneData, description: e.target.value })} 
+            margin="normal" />
 
-        <Button variant="contained" color="primary" onClick={handleSave} fullWidth size="large" 
-          disabled={!geometry || !zoneData.name.trim()} sx={{ mt: 3 }}>
-          {initialZone ? 'Mettre à jour' : 'Sauvegarder'}
-        </Button>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Niveau d'alerte</InputLabel>
+            <Select value={zoneData.alertLevel} onChange={(e) => setZoneData({ ...zoneData, alertLevel: e.target.value })}>
+              <MenuItem value="low">Faible (Vert)</MenuItem>
+              <MenuItem value="medium">Moyen (Orange)</MenuItem>
+              <MenuItem value="high">Critique (Rouge)</MenuItem>
+            </Select>
+          </FormControl>
 
-        {geometry && (
           <Box sx={{ mt: 2 }}>
-            <Chip label={`${geometry.type === 'circle' ? 'Cercle' : 'Polygone'}`} color="success" variant="outlined" />
-            {geometry.type === 'circle' && (
-              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                Rayon: {(geometry.radius / 1000).toFixed(2)} km
-              </Typography>
-            )}
-            {geometry.type === 'polygon' && (
-              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                {geometry.coordinates.length - 1} points
-              </Typography>
-            )}
+            <Typography variant="subtitle2">Messages</Typography>
+            <TextField fullWidth label="Message d'entrée" value={zoneData.entryMessage} 
+              onChange={(e) => setZoneData({ ...zoneData, entryMessage: e.target.value })} margin="dense" />
+            <TextField fullWidth label="Message de sortie" value={zoneData.exitMessage} 
+              onChange={(e) => setZoneData({ ...zoneData, exitMessage: e.target.value })} margin="dense" />
           </Box>
-        )}
-      </Paper>
 
-      <Box sx={{ flex: 1, position: 'relative' }}>
-        <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
-      </Box>
+          <FormControlLabel control={<Switch checked={zoneData.smsAlert} onChange={(e) => setZoneData({ ...zoneData, smsAlert: e.target.checked })} />} label="Alerte SMS" />
+          {zoneData.smsAlert && <TextField fullWidth label="Téléphone" value={zoneData.contactPhone} onChange={(e) => setZoneData({ ...zoneData, contactPhone: e.target.value })} margin="normal" />}
+          
+          <FormControlLabel control={<Switch checked={zoneData.soundAlert} onChange={(e) => setZoneData({ ...zoneData, soundAlert: e.target.checked })} />} label="Alerte sonore" />
+          <FormControlLabel control={<Switch checked={zoneData.predictiveAlerts} onChange={(e) => setZoneData({ ...zoneData, predictiveAlerts: e.target.checked })} />} label="Prédictive (30s)" />
+
+          <Button 
+            variant="contained" 
+            color="primary" 
+            fullWidth 
+            size="large"
+            sx={{ mt: 3 }}
+            onClick={() => setActiveStep(1)}
+            disabled={!zoneData.name.trim()}
+          >
+            Suivant: Dessiner la zone
+          </Button>
+        </Paper>
+      ) : (
+        // ÉTAPE 2: Dessin avec carte
+        <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          {/* Panneau de contrôle */}
+          <Paper sx={{ width: 350, p: 3, overflow: 'auto', zIndex: 10 }}>
+            <Typography variant="h6" gutterBottom>Dessiner la zone</Typography>
+            
+            {!geometry && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Sélectionnez un outil et cliquez sur la carte
+              </Alert>
+            )}
+
+            <ToggleButtonGroup 
+              value={drawingMode} 
+              exclusive 
+              onChange={(e, m) => {
+                if (m !== null) {
+                  setDrawingMode(m);
+                  setCircleStep(0);
+                  circleCenterRef.current = null;
+                }
+              }} 
+              fullWidth 
+              size="small"
+              disabled={!!geometry}
+              sx={{ mb: 2 }}
+            >
+              <ToggleButton value="circle">
+                <CircleIcon sx={{ mr: 1 }} />
+                Cercle
+              </ToggleButton>
+              <ToggleButton value="polygon">
+                <PolygonIcon sx={{ mr: 1 }} />
+                Polygone
+              </ToggleButton>
+            </ToggleButtonGroup>
+
+            {drawingMode === 'circle' && !geometry && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {circleStep === 0 ? 'Étape 1: Cliquez pour le CENTRE' : 'Étape 2: Cliquez pour le RAYON'}
+              </Alert>
+            )}
+
+            {drawingMode === 'polygon' && !geometry && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {pointCount} point{pointCount > 1 ? 's' : ''} placé{pointCount > 1 ? 's' : ''}
+              </Alert>
+            )}
+
+            {drawingMode === 'polygon' && pointCount > 0 && !geometry && (
+              <Button 
+                variant="contained" 
+                color="success" 
+                fullWidth 
+                sx={{ mb: 2 }} 
+                onClick={finalizePolygon}
+              >
+                Finaliser ({pointCount} points)
+              </Button>
+            )}
+
+            {geometry && (
+              <>
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  {geometry.type === 'circle' ? 'Cercle' : 'Polygone'} créé
+                </Alert>
+                
+                <Button variant="outlined" color="error" fullWidth sx={{ mb: 2 }} startIcon={<DeleteIcon />} onClick={clearDrawing}>
+                  Effacer et redessiner
+                </Button>
+              </>
+            )}
+
+            <Stack spacing={2}>
+              <Button 
+                variant="contained" 
+                color="primary" 
+                fullWidth 
+                size="large"
+                onClick={handleSave}
+                disabled={!geometry}
+              >
+                SAUVEGARDER
+              </Button>
+              
+              <Button 
+                variant="outlined" 
+                fullWidth 
+                onClick={() => setActiveStep(0)}
+              >
+                Retour
+              </Button>
+            </Stack>
+          </Paper>
+
+          {/* ✅ CARTE - Conteneur avec dimensions fixes */}
+          <Box sx={{ flex: 1, position: 'relative', minHeight: 0 }}>
+            <div 
+              ref={mapRef} 
+              style={{ 
+                width: '100%', 
+                height: '100%',
+                minHeight: '400px'
+              }} 
+            />
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 };

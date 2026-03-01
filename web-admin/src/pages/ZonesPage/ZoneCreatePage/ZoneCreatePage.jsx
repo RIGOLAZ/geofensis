@@ -74,22 +74,16 @@ export default function ZoneCreatePage() {
     }
   }
 
-  const handleZoneDrawn = (geometry) => {
-    if (geometry.type === 'circle') {
-      setZoneData(prev => ({
-        ...prev,
-        type: 'circle',
-        center: geometry.center,
-        radius: geometry.radius
-      }))
-    } else {
-      setZoneData(prev => ({
-        ...prev,
-        type: 'polygon',
-        coordinates: geometry.coordinates
+  const handleZoneDrawn = (zoneDataFromEditor) => {
+    // zoneDataFromEditor contient: type, center, radius, coordinates, etc.
+    setZoneData(prev => ({
+      ...prev,
+      type: zoneDataFromEditor.type,
+      center: zoneDataFromEditor.center || null,
+      radius: zoneDataFromEditor.radius || 100,
+      coordinates: zoneDataFromEditor.coordinates || []
       }))
     }
-  }
 
   const renderStepContent = (step) => {
     switch (step) {
@@ -147,7 +141,16 @@ export default function ZoneCreatePage() {
         return (
           <Box sx={{ mt: 2, height: 500 }}>
             <ZoneMapEditor 
-              onZoneDrawn={handleZoneDrawn}
+              onSave={(data) => {
+                handleZoneDrawn({
+                  type: data.type,
+                  center: data.center,
+                  radius: data.radius,
+                  coordinates: data.coordinates
+                });
+                // Passer à l'étape suivante automatiquement
+                setActiveStep(2);
+              }}
               defaultType={zoneData.type}
             />
           </Box>
@@ -156,7 +159,7 @@ export default function ZoneCreatePage() {
       case 2:
         return (
           <Box sx={{ mt: 2 }}>
-            <Typography variant="h6">RÃ©capitulatif</Typography>
+            <Typography variant="h6">Récapitulatif</Typography>
             <Typography><strong>Nom:</strong> {zoneData.name}</Typography>
             <Typography><strong>Type:</strong> {zoneData.type === 'circle' ? 'Cercle' : 'Polygone'}</Typography>
             <Typography><strong>Niveau d'alerte:</strong> {zoneData.alertLevel}</Typography>
