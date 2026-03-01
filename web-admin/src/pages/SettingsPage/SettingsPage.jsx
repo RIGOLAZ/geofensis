@@ -32,7 +32,7 @@ const SettingsPage = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>
-        ParamÃ¨tres
+        Paramètres
       </Typography>
 
       <Paper sx={{ mb: 2 }}>
@@ -51,7 +51,7 @@ const SettingsPage = () => {
           <ListItem>
             <ListItemText
               primary="Notifications push"
-              secondary="Recevoir les alertes en temps rÃ©el"
+              secondary="Recevoir les alertes en temps réel"
             />
             <Switch
               checked={pushNotifications}
@@ -66,7 +66,7 @@ const SettingsPage = () => {
           <ListItem>
             <ListItemText
               primary="Mode sombre"
-              secondary="Activer le thÃ¨me sombre"
+              secondary="Activer le thème sombre"
             />
             <Switch
               checked={darkMode}
@@ -80,18 +80,18 @@ const SettingsPage = () => {
         <List>
           <ListItemButton onClick={() => setBackupDialogOpen(true)}>
             <ListItemText
-              primary="Sauvegarde des donnÃ©es"
-              secondary="Exporter toutes les donnÃ©es"
+              primary="Sauvegarde des données"
+              secondary="Exporter toutes les données"
             />
           </ListItemButton>
         </List>
       </Paper>
 
       <Dialog open={backupDialogOpen} onClose={() => setBackupDialogOpen(false)}>
-        <DialogTitle>Sauvegarde des donnÃ©es</DialogTitle>
+        <DialogTitle>Sauvegarde des données</DialogTitle>
         <DialogContent>
           <Typography>
-            Cette opÃ©ration va exporter toutes les zones, devices et logs dans un fichier JSON.
+            Cette opération va exporter toutes les zones, devices et logs dans un fichier JSON.
           </Typography>
         </DialogContent>
         <DialogActions>

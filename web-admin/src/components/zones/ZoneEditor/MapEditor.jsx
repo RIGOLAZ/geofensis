@@ -12,9 +12,10 @@ const MapEditor = ({ onSave, initialZone = null }) => {
   
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const mapContainerRef = useRef(null); // Ref pour le conteneur DOM
   
   const polygonPointsRef = useRef([]);
-  const markersRef = useRef([]);
+  const markersRef = useRef([]); // Pour AdvancedMarkerElement
   const shapesRef = useRef([]);
   const tempPolylineRef = useRef(null);
   const clickListenerRef = useRef(null);
@@ -49,26 +50,23 @@ const MapEditor = ({ onSave, initialZone = null }) => {
     }
   }, []);
 
-  // ✅ Initialiser la carte quand on passe à l'étape 2 OU si édition
+  // Initialiser la carte
   useEffect(() => {
     if (!isLoaded || !google?.maps?.Map) return;
-    
-    // Si on est à l'étape 1 et pas en édition, ne pas créer la carte encore
     if (activeStep === 0 && !initialZone) return;
-    
-    // Si la carte existe déjà, ne pas la recréer
     if (mapInstanceRef.current) return;
-    
-    // Attendre que le DOM soit prêt
-    setTimeout(() => {
-      if (!mapRef.current) {
-        console.error('mapRef.current est null!');
+
+    // Utiliser setTimeout pour s'assurer que le DOM est prêt
+    const timer = setTimeout(() => {
+      if (!mapContainerRef.current) {
+        console.error('Conteneur carte non trouvé');
         return;
       }
 
-      console.log('🗺️ Création de la carte...');
+      console.log('🗺️ Création carte...');
       
-      const map = new google.maps.Map(mapRef.current, {
+      // Lors de la création de la carte, ajoutez mapId:
+      const map = new google.maps.Map(mapContainerRef.current, {
         center: initialZone?.center || { lat: 48.8566, lng: 2.3522 },
         zoom: initialZone ? 15 : 13,
         mapTypeId: 'hybrid',
@@ -78,26 +76,31 @@ const MapEditor = ({ onSave, initialZone = null }) => {
         mapTypeControlOptions: {
           position: google.maps.ControlPosition.TOP_RIGHT,
         },
+        // ✅ AJOUT: Map ID requis pour AdvancedMarkerElement
+        mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID,
       });
       
       mapInstanceRef.current = map;
+      mapRef.current = map;
 
       if (initialZone) {
         displayExistingZone(initialZone, map);
       }
     }, 100);
 
-    return () => {
-      // Cleanup uniquement si on quitte complètement le composant
-      // Pas si on change d'étape
-    };
-  }, [isLoaded, google, activeStep, initialZone]); // ✅ Dépend de activeStep
+    return () => clearTimeout(timer);
+  }, [isLoaded, google, activeStep, initialZone]);
+
+  // Cleanup global
+  useEffect(() => {
+    return () => cleanup();
+  }, []);
 
   const cleanup = () => {
     if (clickListenerRef.current) {
       google.maps.event.removeListener(clickListenerRef.current);
     }
-    markersRef.current.forEach(m => m.setMap?.(null));
+    markersRef.current.forEach(m => m.map = null); // AdvancedMarkerElement
     shapesRef.current.forEach(s => s.setMap?.(null));
     if (tempPolylineRef.current) {
       tempPolylineRef.current.setMap(null);
@@ -105,26 +108,24 @@ const MapEditor = ({ onSave, initialZone = null }) => {
     mapInstanceRef.current = null;
   };
 
-  // ✅ Cleanup complet quand le composant est détruit
-  useEffect(() => {
-    return () => cleanup();
-  }, []);
-
   const clearDrawing = useCallback(() => {
     if (clickListenerRef.current) {
       google.maps.event.removeListener(clickListenerRef.current);
       clickListenerRef.current = null;
     }
     
-    markersRef.current.forEach(m => m.setMap?.(null));
+    // Supprimer les AdvancedMarkerElement
+    markersRef.current.forEach(m => m.map = null);
+    markersRef.current = [];
+    
     shapesRef.current.forEach(s => s.setMap?.(null));
+    shapesRef.current = [];
+    
     if (tempPolylineRef.current) {
       tempPolylineRef.current.setMap(null);
+      tempPolylineRef.current = null;
     }
     
-    markersRef.current = [];
-    shapesRef.current = [];
-    tempPolylineRef.current = null;
     polygonPointsRef.current = [];
     circleCenterRef.current = null;
     
@@ -208,25 +209,22 @@ const MapEditor = ({ onSave, initialZone = null }) => {
     } else if (drawingMode === 'polygon') {
       handlePolygonClick(lat, lng, color);
     }
-  }, [drawingMode, zoneData.alertLevel, getAlertColor, circleStep]);
+  }, [drawingMode, zoneData.alertColor, getAlertColor, circleStep]);
 
-  const handleCircleClick = (lat, lng, color) => {
+  // ✅ CERCLE avec AdvancedMarkerElement
+  const handleCircleClick = async (lat, lng, color) => {
     if (circleStep === 0) {
-      markersRef.current.forEach(m => m.setMap(null));
+      // Étape 1: Centre
+      markersRef.current.forEach(m => m.map = null);
       markersRef.current = [];
       
-      const marker = google.maps.marker.AdvancedMarkerElement({
-        position: { lat, lng },
+      const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+      
+      const marker = new AdvancedMarkerElement({
         map: mapInstanceRef.current,
+        position: { lat, lng },
         title: 'Centre',
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 12,
-          fillColor: color,
-          fillOpacity: 1,
-          strokeColor: '#fff',
-          strokeWeight: 3,
-        }
+        content: buildMarkerContent('C', color),
       });
       
       markersRef.current.push(marker);
@@ -234,6 +232,7 @@ const MapEditor = ({ onSave, initialZone = null }) => {
       setCircleStep(1);
       
     } else if (circleStep === 1) {
+      // Étape 2: Rayon
       const center = circleCenterRef.current;
       if (!center) return;
       
@@ -242,7 +241,7 @@ const MapEditor = ({ onSave, initialZone = null }) => {
         new google.maps.LatLng(lat, lng)
       );
       
-      markersRef.current.forEach(m => m.setMap(null));
+      markersRef.current.forEach(m => m.map = null);
       markersRef.current = [];
       
       const circle = new google.maps.Circle({
@@ -273,29 +272,23 @@ const MapEditor = ({ onSave, initialZone = null }) => {
     }
   };
 
-  const handlePolygonClick = (lat, lng, color) => {
+  // ✅ POLYGONE avec AdvancedMarkerElement
+  const handlePolygonClick = async (lat, lng, color) => {
     const newPoint = { lat, lng };
     polygonPointsRef.current.push(newPoint);
     const currentCount = polygonPointsRef.current.length;
     
     setPointCount(currentCount);
     
-    const marker = google.maps.marker.AdvancedMarkerElement({
-      position: newPoint,
+    const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+    
+    const marker = new AdvancedMarkerElement({
       map: mapInstanceRef.current,
-      label: {
-        text: String(currentCount),
-        color: 'white',
-      },
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 12,
-        fillColor: '#2196f3',
-        fillOpacity: 1,
-        strokeColor: '#fff',
-        strokeWeight: 2,
-      }
+      position: newPoint,
+      title: `Point ${currentCount}`,
+      content: buildMarkerContent(String(currentCount), '#2196f3'),
     });
+    
     markersRef.current.push(marker);
     
     if (tempPolylineRef.current) {
@@ -311,7 +304,26 @@ const MapEditor = ({ onSave, initialZone = null }) => {
     }
   };
 
-  const finalizePolygon = useCallback(() => {
+  // ✅ Helper pour créer le contenu du marker
+  const buildMarkerContent = (label, color) => {
+    const div = document.createElement('div');
+    div.style.backgroundColor = color;
+    div.style.color = 'white';
+    div.style.borderRadius = '50%';
+    div.style.width = '28px';
+    div.style.height = '28px';
+    div.style.display = 'flex';
+    div.style.alignItems = 'center';
+    div.style.justifyContent = 'center';
+    div.style.fontWeight = 'bold';
+    div.style.fontSize = '14px';
+    div.style.border = '2px solid white';
+    div.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
+    div.textContent = label;
+    return div;
+  };
+
+  const finalizePolygon = useCallback(async () => {
     const points = polygonPointsRef.current;
     
     if (points.length < 3) {
@@ -322,7 +334,7 @@ const MapEditor = ({ onSave, initialZone = null }) => {
     const color = getAlertColor(zoneData.alertLevel);
     const coords = [...points, points[0]];
     
-    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current.forEach(m => m.map = null);
     markersRef.current = [];
     
     if (tempPolylineRef.current) {
@@ -349,36 +361,33 @@ const MapEditor = ({ onSave, initialZone = null }) => {
   }, [zoneData.alertLevel, getAlertColor]);
 
   const handleSave = () => {
-  if (!geometry) {
-    alert('Veuillez dessiner une zone sur la carte');
-    return;
-  }
+    if (!geometry) {
+      alert('Veuillez dessiner une zone');
+      return;
+    }
+    if (!zoneData.name.trim()) {
+      alert('Nom requis');
+      return;
+    }
 
-  if (!zoneData.name.trim()) {
-    alert('Veuillez donner un nom à la zone');
-    return;
-  }
+    const data = {
+      ...zoneData,
+      type: geometry.type,
+      ...(geometry.type === 'circle' 
+        ? { center: geometry.center, radius: geometry.radius }
+        : { coordinates: geometry.coordinates }
+      ),
+      updatedAt: new Date(),
+      createdAt: initialZone?.createdAt || new Date(),
+    };
 
-  const data = {
-    ...zoneData,
-    type: geometry.type,
-    ...(geometry.type === 'circle' 
-      ? { center: geometry.center, radius: geometry.radius }
-      : { coordinates: geometry.coordinates }
-    ),
-    updatedAt: new Date(),
-    createdAt: initialZone?.createdAt || new Date(),
+    if (typeof onSave !== 'function') {
+      alert('Erreur: Fonction de sauvegarde non définie');
+      return;
+    }
+
+    onSave(data);
   };
-
-  // ✅ VÉRIFICATION onSave
-  if (typeof onSave !== 'function') {
-    console.error('❌ onSave n\'est pas une fonction!', onSave);
-    alert('Erreur: Fonction de sauvegarde non définie');
-    return;
-  }
-
-  onSave(data);
-};
 
   const steps = ['Informations', 'Dessin sur la carte'];
 
@@ -400,7 +409,6 @@ const MapEditor = ({ onSave, initialZone = null }) => {
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* ✅ UN SEUL STEPPER */}
       <Stepper activeStep={activeStep} sx={{ p: 2, bgcolor: 'background.paper' }}>
         {steps.map((label) => (
           <Step key={label}>
@@ -410,7 +418,6 @@ const MapEditor = ({ onSave, initialZone = null }) => {
       </Stepper>
 
       {activeStep === 0 ? (
-        // ÉTAPE 1: Formulaire
         <Paper sx={{ flex: 1, p: 3, overflow: 'auto', maxWidth: 600, mx: 'auto', mt: 2 }}>
           <Typography variant="h5" gutterBottom>Nouvelle Zone</Typography>
           
@@ -462,9 +469,7 @@ const MapEditor = ({ onSave, initialZone = null }) => {
           </Button>
         </Paper>
       ) : (
-        // ÉTAPE 2: Dessin avec carte
         <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          {/* Panneau de contrôle */}
           <Paper sx={{ width: 350, p: 3, overflow: 'auto', zIndex: 10 }}>
             <Typography variant="h6" gutterBottom>Dessiner la zone</Typography>
             
@@ -557,10 +562,10 @@ const MapEditor = ({ onSave, initialZone = null }) => {
             </Stack>
           </Paper>
 
-          {/* ✅ CARTE - Conteneur avec dimensions fixes */}
+          {/* ✅ Conteneur carte avec ref correcte */}
           <Box sx={{ flex: 1, position: 'relative', minHeight: 0 }}>
             <div 
-              ref={mapRef} 
+              ref={mapContainerRef}
               style={{ 
                 width: '100%', 
                 height: '100%',
