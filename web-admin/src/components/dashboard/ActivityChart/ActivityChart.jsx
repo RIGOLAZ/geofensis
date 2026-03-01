@@ -10,9 +10,9 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '../../../api/firebase';
 import { format, subDays, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { db } from '../../../config/firebase';
 
 const ActivityChart = () => {
   const [data, setData] = useState([]);

@@ -10,7 +10,7 @@ import {
   onSnapshot,
   serverTimestamp
 } from 'firebase/firestore'
-import { db } from './firebase'
+import { db } from '../config/firebase'
 
 const DEVICES_COLLECTION = 'devices'
 

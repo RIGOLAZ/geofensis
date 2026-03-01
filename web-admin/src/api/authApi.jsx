@@ -6,7 +6,7 @@ import {
   updateProfile,
 } from 'firebase/auth'
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { auth, db } from '../api/firebase'
+import { db } from '../config/firebase'
 
 // Inscription
 export const registerUser = async (email, password, displayName) => {

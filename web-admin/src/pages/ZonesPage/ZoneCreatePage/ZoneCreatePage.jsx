@@ -126,11 +126,11 @@ export default function ZoneCreatePage() {
             </FormControl>
             <TextField
               fullWidth
-              label="Message d'entrÃ©e"
+              label="Message d'entrée"
               value={zoneData.entryMessage}
               onChange={(e) => setZoneData({ ...zoneData, entryMessage: e.target.value })}
               margin="normal"
-              placeholder="Vous entrez dans une zone sÃ©curisÃ©e"
+              placeholder="Vous entrez dans une zone sécurisée"
             />
             <TextField
               fullWidth
@@ -182,7 +182,7 @@ export default function ZoneCreatePage() {
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
-        CrÃ©er une Zone
+        Créer une Zone
       </Typography>
 
       {error && (
@@ -219,7 +219,7 @@ export default function ZoneCreatePage() {
               disabled={loading}
               startIcon={loading && <CircularProgress size={20} />}
             >
-              {loading ? 'CrÃ©ation...' : 'CrÃ©er la zone'}
+              {loading ? 'Création...' : 'Créer la zone'}
             </Button>
           )}
         </Box>

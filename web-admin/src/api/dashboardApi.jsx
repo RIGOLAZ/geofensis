@@ -1,5 +1,5 @@
 import { collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore'
-import { db } from './firebase'
+import { db } from '../config/firebase'
 
 export const getDashboardStats = async () => {
   try {
