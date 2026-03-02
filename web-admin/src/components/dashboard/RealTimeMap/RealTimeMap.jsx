@@ -1,10 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { useGoogleMaps } from '../../../context/GoogleMapsContext';
+import { db } from '../../../config/firebase';
 
 const mapContainerStyle = {
   width: '100%',
-  height: '350px'
+  height: '500px'
 };
 
 const center = {
@@ -17,66 +19,143 @@ function RealTimeMap({ devices = [] }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
+  const zonesRef = useRef([]); // Pour stocker les zones affichées
 
+  // Initialiser la carte
   useEffect(() => {
-    // Vérifier que tout est prêt
-    if (!isLoaded || !google || !google.maps || !mapRef.current || mapInstanceRef.current) {
-      return;
-    }
+    if (!isLoaded || !google?.maps?.Map || !mapRef.current || mapInstanceRef.current) return;
 
-    try {
-      const map = new google.maps.Map(mapRef.current, {
-        center: center,
-        zoom: 13,
-        mapTypeId: 'roadmap',
-        streetViewControl: false,
-        fullscreenControl: false,
-      });
+    const map = new google.maps.Map(mapRef.current, {
+      center: center,
+      zoom: 13,
+      mapTypeId: 'roadmap',
+      streetViewControl: false,
+      fullscreenControl: false,
+      mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID,
+    });
 
-      mapInstanceRef.current = map;
-    } catch (error) {
-      console.error('Erreur création carte:', error);
-    }
+    mapInstanceRef.current = map;
+
+    // Charger et afficher les zones
+    const unsubscribeZones = loadZones(map, google);
 
     return () => {
-      // Cleanup
-      markersRef.current.forEach(marker => {
-        if (marker && marker.setMap) marker.setMap(null);
-      });
-      markersRef.current = [];
+      unsubscribeZones();
+      markersRef.current.forEach(marker => marker.map = null);
+      zonesRef.current.forEach(zone => zone.setMap?.(null));
       mapInstanceRef.current = null;
     };
-  }, [isLoaded, google]); // Dépendances importantes
+  }, [isLoaded, google]);
 
-  // Mettre à jour les markers quand devices change
-  useEffect(() => {
-    if (!mapInstanceRef.current || !google || !google.maps) return;
+  // Charger les zones depuis Firestore
+  const loadZones = (map, google) => {
+    return onSnapshot(collection(db, 'zones'), (snapshot) => {
+      // Supprimer anciennes zones
+      zonesRef.current.forEach(zone => zone.setMap?.(null));
+      zonesRef.current = [];
 
-    // Supprimer anciens markers
-    markersRef.current.forEach(marker => {
-      if (marker && marker.setMap) marker.setMap(null);
+      snapshot.docs.forEach(doc => {
+        const zone = { id: doc.id, ...doc.data() };
+        displayZone(zone, map, google);
+      });
     });
+  };
+
+  // Afficher une zone sur la carte
+  const displayZone = (zone, map, google) => {
+    const color = getAlertColor(zone.alertLevel);
+
+    if (zone.type === 'circle' && zone.center && zone.radius) {
+      const circle = new google.maps.Circle({
+        map,
+        center: zone.center,
+        radius: zone.radius,
+        fillColor: color,
+        fillOpacity: 0.2,
+        strokeColor: color,
+        strokeWeight: 2,
+      });
+      zonesRef.current.push(circle);
+
+      // Info window au clic
+      circle.addListener('click', () => {
+        showZoneInfo(zone, zone.center);
+      });
+
+    } else if (zone.type === 'polygon' && zone.coordinates?.length > 0) {
+      const polygon = new google.maps.Polygon({
+        map,
+        paths: zone.coordinates,
+        fillColor: color,
+        fillOpacity: 0.2,
+        strokeColor: color,
+        strokeWeight: 2,
+      });
+      zonesRef.current.push(polygon);
+
+      // Info window au clic (centre du polygone approximatif)
+      const bounds = new google.maps.LatLngBounds();
+      zone.coordinates.forEach(coord => bounds.extend(coord));
+      const center = bounds.getCenter();
+      
+      polygon.addListener('click', () => {
+        showZoneInfo(zone, { lat: center.lat(), lng: center.lng() });
+      });
+    }
+  };
+
+  // Afficher info de la zone
+  const showZoneInfo = (zone, position) => {
+    const content = `
+      <div style="padding: 10px; max-width: 200px;">
+        <h3 style="margin: 0 0 5px 0; color: ${getAlertColor(zone.alertLevel)};">${zone.name}</h3>
+        <p style="margin: 0; font-size: 12px;">${zone.description || 'Pas de description'}</p>
+        <p style="margin: 5px 0 0 0; font-size: 11px; color: #666;">
+          Niveau: ${zone.alertLevel} | Type: ${zone.type}
+        </p>
+      </div>
+    `;
+
+    new google.maps.InfoWindow({
+      content,
+      position,
+    }).open(mapInstanceRef.current);
+  };
+
+  const getAlertColor = (level) => {
+    switch (level) {
+      case 'high': return '#f44336';
+      case 'medium': return '#ff9800';
+      case 'low': return '#4caf50';
+      default: return '#2196f3';
+    }
+  };
+
+  // Mettre à jour les positions des devices
+  useEffect(() => {
+    if (!mapInstanceRef.current || !google) return;
+
+    markersRef.current.forEach(marker => marker.map = null);
     markersRef.current = [];
 
-    if (devices.length === 0) return;
-
-    const bounds = new google.maps.LatLngBounds();
-    let hasValidPosition = false;
-
     devices.forEach(device => {
-      if (device.lat && device.lng && google.maps.Marker) {
-        const position = { lat: device.lat, lng: device.lng };
-        
+      if (device.lat && device.lng) {
         const marker = new google.maps.Marker({
-          position,
+          position: { lat: device.lat, lng: device.lng },
           map: mapInstanceRef.current,
           title: device.name || device.id,
-          animation: google.maps.Animation?.DROP,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 10,
+            fillColor: '#2196f3',
+            fillOpacity: 1,
+            strokeColor: '#fff',
+            strokeWeight: 2,
+          }
         });
 
-        // Info window
         const infoWindow = new google.maps.InfoWindow({
-          content: `<div><strong>${device.name || device.id}</strong><br/>Lat: ${device.lat.toFixed(4)}<br/>Lng: ${device.lng.toFixed(4)}</div>`
+          content: `<div><strong>${device.name || device.id}</strong><br/>${device.lat.toFixed(4)}, ${device.lng.toFixed(4)}</div>`
         });
 
         marker.addListener('click', () => {
@@ -84,53 +163,27 @@ function RealTimeMap({ devices = [] }) {
         });
 
         markersRef.current.push(marker);
-        bounds.extend(position);
-        hasValidPosition = true;
       }
     });
-
-    if (hasValidPosition && mapInstanceRef.current) {
-      mapInstanceRef.current.fitBounds(bounds);
-      if (devices.length === 1) {
-        mapInstanceRef.current.setZoom(15);
-      }
-    }
   }, [devices, google]);
 
   if (loadError) {
     return (
-      <Box sx={{ 
-        height: 350, 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        bgcolor: 'error.light',
-        color: 'error.contrastText',
-        borderRadius: 1
-      }}>
+      <Box sx={{ height: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'error.light' }}>
         <Typography>Erreur: {loadError.message}</Typography>
       </Box>
     );
   }
 
-  if (!isLoaded || !google || !google.maps) {
+  if (!isLoaded || !google?.maps?.Map) {
     return (
-      <Box sx={{ 
-        height: 350, 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        gap: 2
-      }}>
-        <CircularProgress size={24} />
-        <Typography color="textSecondary">Chargement de la carte...</Typography>
+      <Box sx={{ height: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress />
       </Box>
     );
   }
 
-  return (
-    <div ref={mapRef} style={mapContainerStyle} />
-  );
+  return <div ref={mapRef} style={mapContainerStyle} />;
 }
 
-export default React.memo(RealTimeMap);
+export default RealTimeMap;
