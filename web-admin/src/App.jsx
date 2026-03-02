@@ -9,6 +9,7 @@ import ZonesListPage from './pages/ZonesPage/ZonesListPage/ZonesListPage';
 import ZoneCreatePage from './pages/ZonesPage/ZoneCreatePage/ZoneCreatePage';
 import ZoneEditPage from './pages/ZonesPage/ZoneEditPage/ZoneEditPage';
 import DevicesListPage from './pages/DevicesPage/DevicesListPage';
+import DeviceCreatePage from './pages/DevicesPage/DeviceCreatePage' // Nouveau
 import AnalyticsPage from './pages/AnalyticsPage/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage/SettingsPage';
 import { GoogleMapsProvider } from './context/GoogleMapsContext';
@@ -35,6 +36,7 @@ function App() {
               <Route path="zones/create" element={<ZoneCreatePage />} />
               <Route path="zones/edit/:id" element={<ZoneEditPage />} />
               <Route path="devices" element={<DevicesListPage />} />
+              <Route path="devices/create" element={<DeviceCreatePage />} /> // Ajoutez ceci
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
