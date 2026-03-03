@@ -36,7 +36,10 @@ function App() {
           <Route path="zones/create" element={<ZoneCreatePage />} />
           <Route path="zones/edit/:id" element={<ZoneEditPage />} />
           
-          {/* Routes Devices - ORDRE IMPORTANT */}
+          {/* ✅ NOUVELLE ROUTE GEOFENCING */}
+          <Route path="geofencing" element={<ZoneEditPage />} />
+          
+          {/* Routes Devices */}
           <Route path="devices/create" element={<DeviceCreatePage />} />
           <Route path="devices/:id" element={<DeviceDetailsPage />} />
           <Route path="devices" element={<DevicesListPage />} />
