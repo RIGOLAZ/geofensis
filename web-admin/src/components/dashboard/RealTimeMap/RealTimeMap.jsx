@@ -6,7 +6,7 @@ import { db } from '../../../config/firebase';
 
 const mapContainerStyle = {
   width: '100%',
-  height: '500px'
+  height: '380px'
 };
 
 const center = {
