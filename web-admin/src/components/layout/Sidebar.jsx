@@ -16,6 +16,8 @@ import {
   Map as MapIcon,
   Devices as DevicesIcon,
   Settings as SettingsIcon,
+  // ✅ AJOUTE CET ICÔNE
+  LocationOn as LiveIcon,
 } from '@mui/icons-material'
 
 const drawerWidth = 240
@@ -24,6 +26,8 @@ const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
   { text: 'Zones', icon: <MapIcon />, path: '/zones' },
   { text: 'Devices', icon: <DevicesIcon />, path: '/devices' },
+  // ✅ AJOUTE CETTE LIGNE
+  { text: 'Live', icon: <LiveIcon />, path: '/live' },
   { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
 ]
 

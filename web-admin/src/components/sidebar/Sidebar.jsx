@@ -1,12 +1,13 @@
 ﻿import React from 'react';
 import { Drawer, List, ListItem, ListItemText, ListItemButton, Box, Typography } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Dashboard, Map, Devices, Analytics, Settings } from '@mui/icons-material';
+import { Dashboard, Map, Devices, Analytics, Settings, MyLocation } from '@mui/icons-material'; // ✅ Ajout MyLocation
 
 const drawerWidth = 240;
 
 const menuItems = [
   { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
+  { text: 'Live Map', icon: <MyLocation />, path: '/live' }, // ✅ AJOUTÉ ICI
   { text: 'Zones', icon: <Map />, path: '/zones' },
   { text: 'Devices', icon: <Devices />, path: '/devices' },
   { text: 'Analytics', icon: <Analytics />, path: '/analytics' },
