@@ -15,7 +15,7 @@
       ]
     }
   ],
-  "hosting": {
+    "hosting": {
     "site": "etralis-3ea75",
     "public": "web-admin/dist",
     "ignore": [
@@ -27,17 +27,6 @@
       {
         "source": "**",
         "destination": "/index.html"
-      }
-    ],
-    "headers": [
-      {
-        "source": "**/*.@(js|css)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "max-age=31536000"
-          }
-        ]
       }
     ]
   },

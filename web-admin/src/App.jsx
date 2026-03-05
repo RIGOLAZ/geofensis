@@ -13,7 +13,6 @@ import DeviceCreatePage from './pages/DevicesPage/DeviceCreatePage';
 import DeviceDetailsPage from './pages/DevicesPage/DeviceDetailsPage';
 import AnalyticsPage from './pages/AnalyticsPage/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage/SettingsPage';
-import LiveMap from './components/LiveMap/LiveMap';
 
 const theme = createTheme({
   palette: {
@@ -39,7 +38,6 @@ function App() {
           
           {/* ✅ NOUVELLE ROUTE GEOFENCING */}
           <Route path="geofencing" element={<ZoneEditPage />} />
-          <Route path="live" element={<LiveMap />} />
           
           {/* Routes Devices */}
           <Route path="devices/create" element={<DeviceCreatePage />} />

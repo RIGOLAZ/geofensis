@@ -1,7 +1,7 @@
 ﻿import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { Box } from '@mui/material';
-import Sidebar from './Sidebar';
+import Sidebar from '../sidebar/Sidebar';
 import Header from './Header';
 
 const Layout = () => {

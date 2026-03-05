@@ -9,6 +9,7 @@ const GoogleMapsContext = createContext({
 
 export const useGoogleMaps = () => useContext(GoogleMapsContext);
 
+// ✅ Chargement async moderne
 const loadGoogleMapsScript = () => {
   return new Promise((resolve, reject) => {
     if (window.google?.maps?.Map) {
@@ -16,8 +17,8 @@ const loadGoogleMapsScript = () => {
       return;
     }
 
-    const existingScript = document.getElementById('google-maps-script');
-    if (existingScript) {
+    // Vérifie si déjà en cours de chargement
+    if (document.querySelector('script[src*="maps.googleapis"]')) {
       const check = setInterval(() => {
         if (window.google?.maps?.Map) {
           clearInterval(check);
@@ -26,23 +27,20 @@ const loadGoogleMapsScript = () => {
       }, 100);
       setTimeout(() => {
         clearInterval(check);
-        window.google?.maps?.Map ? resolve(window.google) : reject(new Error('Timeout'));
-      }, 10000);
+        reject(new Error('Timeout loading Google Maps'));
+      }, 30000);
       return;
     }
 
-    window.__googleMapsCallback = () => {
-      delete window.__googleMapsCallback;
-      resolve(window.google);
-    };
-
+    // Crée le script avec loading=async
     const script = document.createElement('script');
-    script.id = 'google-maps-script';
-    // ✅ AJOUT de la bibliothèque 'marker' pour AdvancedMarkerElement
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=geometry,places,marker&v=weekly&language=fr&region=FR&callback=__googleMapsCallback`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=marker,geometry,places&loading=async&v=weekly&language=fr&region=FR`;
     script.async = true;
     script.defer = true;
-    script.onerror = () => reject(new Error('Échec chargement'));
+    
+    script.onload = () => resolve(window.google);
+    script.onerror = () => reject(new Error('Failed to load Google Maps'));
+    
     document.head.appendChild(script);
   });
 };
@@ -56,22 +54,36 @@ export const GoogleMapsProvider = ({ children }) => {
 
   useEffect(() => {
     let isMounted = true;
+    
     loadGoogleMapsScript()
-      .then((google) => isMounted && setState({ isLoaded: true, loadError: null, google }))
-      .catch((err) => isMounted && setState({ isLoaded: false, loadError: err, google: null }));
+      .then((google) => {
+        if (isMounted) {
+          setState({ isLoaded: true, loadError: null, google });
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setState({ isLoaded: false, loadError: err, google: null });
+        }
+      });
+      
     return () => { isMounted = false; };
   }, []);
 
   const initMap = useCallback((containerRef, options = {}) => {
     if (!state.google || !containerRef?.current) return null;
-    return new state.google.maps.Map(containerRef.current, {
+    
+    const map = new state.google.maps.Map(containerRef.current, {
       center: { lat: 48.8566, lng: 2.3522 },
       zoom: 13,
       mapTypeId: 'hybrid',
       streetViewControl: false,
       fullscreenControl: false,
+      mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID', // ✅ Nécessaire pour AdvancedMarker
       ...options
     });
+    
+    return map;
   }, [state.google]);
 
   return (
