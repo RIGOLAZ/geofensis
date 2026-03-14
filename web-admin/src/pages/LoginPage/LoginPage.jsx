@@ -1,0 +1,287 @@
+// pages/LoginPage/LoginPage.jsx
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Box,
+  Paper,
+  Typography,
+  Button,
+  Avatar,
+  Container,
+  Fade,
+  Zoom
+} from '@mui/material';
+import GoogleIcon from '@mui/icons-material/Google';
+import SecurityIcon from '@mui/icons-material/Security';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import MapIcon from '@mui/icons-material/Map';
+import { useAuth } from '../../context/AuthContext';
+
+const LoginPage = () => {
+  // Récupération du contexte
+  const auth = useAuth();
+  console.log('Clés du contexte:', Object.keys(auth));
+  console.log('Valeur complète:', auth);
+
+  // Destructuration avec valeurs par défaut pour éviter les erreurs
+  const { 
+    loginWithGoogle, 
+    isAuthenticated, 
+    loading 
+  } = auth;
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  const handleLogin = async () => {
+    try {
+      console.log("Clic sur bouton login"); // Debug
+      if (!loginWithGoogle) {
+        console.error("loginWithGoogle n'est pas défini dans le contexte");
+        return;
+      }
+      await loginWithGoogle();
+    } catch (err) {
+      console.error('Erreur login:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ 
+        height: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)'
+      }}>
+        <Zoom in>
+          <Box sx={{ textAlign: 'center' }}>
+            <Avatar sx={{ 
+              width: 80, 
+              height: 80, 
+              bgcolor: 'primary.main',
+              mx: 'auto',
+              mb: 2,
+              animation: 'pulse 1.5s infinite'
+            }}>
+              <SecurityIcon sx={{ fontSize: 40 }} />
+            </Avatar>
+            <Typography variant="h6" color="white">
+              Chargement...
+            </Typography>
+          </Box>
+        </Zoom>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+      p: 2,
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      {/* Effet de fond animé */}
+      <Box sx={{
+        position: 'absolute',
+        top: -100,
+        left: -100,
+        right: -100,
+        bottom: -100,
+        background: 'radial-gradient(circle at 20% 80%, rgba(233, 69, 96, 0.15) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(15, 52, 96, 0.3) 0%, transparent 50%)',
+        animation: 'float 20s ease-in-out infinite'
+      }} />
+
+      <Fade in timeout={1000}>
+        <Container maxWidth="sm" sx={{ position: 'relative', zIndex: 1 }}>
+          <Paper sx={{
+            p: { xs: 3, sm: 5 },
+            textAlign: 'center',
+            borderRadius: 4,
+            background: 'rgba(22, 33, 62, 0.95)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)'
+          }}>
+            {/* Logo animé */}
+            <Zoom in timeout={800}>
+              <Avatar sx={{
+                width: 100,
+                height: 100,
+                bgcolor: 'transparent',
+                mx: 'auto',
+                mb: 3,
+                border: '3px solid',
+                borderColor: 'primary.main',
+                boxShadow: '0 0 30px rgba(25, 118, 210, 0.4)'
+              }}>
+                <SecurityIcon sx={{ fontSize: 50, color: 'primary.main' }} />
+              </Avatar>
+            </Zoom>
+
+            <Typography variant="h3" sx={{ 
+              fontWeight: 'bold', 
+              color: 'white',
+              mb: 1,
+              textShadow: '0 2px 10px rgba(0,0,0,0.3)'
+            }}>
+              Geofensis
+            </Typography>
+
+            <Typography variant="h6" sx={{ 
+              color: 'grey.400',
+              mb: 4,
+              fontWeight: 300
+            }}>
+              Système de Surveillance Géolocalisée
+            </Typography>
+
+            {/* Features */}
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              gap: 3, 
+              mb: 4,
+              flexWrap: 'wrap'
+            }}>
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center',
+                color: 'grey.400'
+              }}>
+                <Avatar sx={{ bgcolor: 'rgba(76, 175, 80, 0.2)', mb: 1 }}>
+                  <LocationOnIcon sx={{ color: '#4caf50' }} />
+                </Avatar>
+                <Typography variant="caption">Tracking GPS</Typography>
+              </Box>
+              
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center',
+                color: 'grey.400'
+              }}>
+                <Avatar sx={{ bgcolor: 'rgba(244, 67, 54, 0.2)', mb: 1 }}>
+                  <NotificationsActiveIcon sx={{ color: '#f44336' }} />
+                </Avatar>
+                <Typography variant="caption">Alertes Temps Réel</Typography>
+              </Box>
+              
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center',
+                color: 'grey.400'
+              }}>
+                <Avatar sx={{ bgcolor: 'rgba(255, 152, 0, 0.2)', mb: 1 }}>
+                  <MapIcon sx={{ color: '#ff9800' }} />
+                </Avatar>
+                <Typography variant="caption">Zones Géofencing</Typography>
+              </Box>
+            </Box>
+
+            <Box sx={{ 
+              bgcolor: 'rgba(15, 52, 96, 0.5)', 
+              p: 3, 
+              borderRadius: 3,
+              mb: 4,
+              border: '1px solid rgba(255,255,255,0.05)'
+            }}>
+              <Typography variant="body2" sx={{ color: 'grey.300', mb: 2 }}>
+                🔒 Accès sécurisé réservé aux administrateurs
+              </Typography>
+              
+              <Box component="ul" sx={{ 
+                color: 'grey.400', 
+                textAlign: 'left', 
+                m: 0, 
+                pl: 2,
+                fontSize: '0.9rem',
+                listStyle: 'none'
+              }}>
+                <Box component="li" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'primary.main' }} />
+                  Suivi GPS en temps réel de tous les devices
+                </Box>
+                <Box component="li" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'primary.main' }} />
+                  Alertes automatiques en cas d'intrusion
+                </Box>
+                <Box component="li" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'primary.main' }} />
+                  Gestion multi-zones avec géofencing avancé
+                </Box>
+              </Box>
+            </Box>
+
+            <Button
+              variant="contained"
+              size="large"
+              fullWidth
+              startIcon={<GoogleIcon sx={{ fontSize: 24 }} />}
+              onClick={handleLogin}
+              sx={{
+                py: 1.5,
+                fontSize: '1.1rem',
+                textTransform: 'none',
+                borderRadius: 3,
+                background: 'linear-gradient(45deg, #4285f4, #34a853, #fbbc05, #ea4335)',
+                backgroundSize: '300% 300%',
+                animation: 'gradient 3s ease infinite',
+                boxShadow: '0 4px 15px rgba(66, 133, 244, 0.4)',
+                '&:hover': {
+                  boxShadow: '0 6px 20px rgba(66, 133, 244, 0.6)',
+                  transform: 'translateY(-2px)'
+                },
+                transition: 'all 0.3s ease'
+              }}
+            >
+              Se connecter avec Google
+            </Button>
+
+            <Typography variant="caption" sx={{ 
+              mt: 3, 
+              display: 'block',
+              color: 'grey.500'
+            }}>
+              Authentification sécurisée via Firebase • SSL 256-bit <br />Développé par Etralis © 2026
+            </Typography>
+          </Paper>
+        </Container>
+      </Fade>
+
+      {/* Animation CSS */}
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: translate(0, 0) rotate(0deg); }
+          33% { transform: translate(30px, -30px) rotate(120deg); }
+          66% { transform: translate(-20px, 20px) rotate(240deg); }
+        }
+        @keyframes gradient {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.05); opacity: 0.8; }
+        }
+      `}</style>
+    </Box>
+  );
+};
+
+export default LoginPage;

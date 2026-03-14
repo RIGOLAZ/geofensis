@@ -1,0 +1,646 @@
+import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Circle, Polygon, Marker, Popup, useMap } from 'react-leaflet';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+import {
+  Box,
+  Grid,
+  Paper,
+  Typography,
+  Card,
+  CardContent,
+  Chip,
+  Avatar,
+  Badge,
+  Fab,
+  Zoom,
+  CircularProgress,
+  Alert,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Divider
+} from '@mui/material';
+import {
+  Devices as DevicesIcon,
+  Warning as WarningIcon,
+  LocationOn as LocationIcon,
+  BatteryFull as BatteryIcon,
+  Smartphone as PhoneIcon,
+  MyLocation as CenterIcon,
+  Notifications as AlertIcon
+} from '@mui/icons-material';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { useAuth } from '../../context/AuthContext';
+
+// Fix icônes Leaflet par défaut
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Icône personnalisée pour devices
+const createDeviceIcon = (status) => L.divIcon({
+  className: 'device-marker',
+  html: `
+    <div style="
+      width: 44px; 
+      height: 44px; 
+      border-radius: 50%; 
+      background: ${status === 'alert' ? '#f44336' : '#4caf50'}; 
+      border: 3px solid white; 
+      box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      font-size: 22px;
+      animation: ${status === 'alert' ? 'pulse 1s infinite' : 'none'};
+    ">📱</div>
+  `,
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
+  popupAnchor: [0, -22]
+});
+
+// Composant pour centrer la carte
+const MapController = ({ center, zoom }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (center) {
+      map.setView(center, zoom || map.getZoom());
+    }
+  }, [center, zoom, map]);
+  return null;
+};
+
+const DashboardPage = () => {
+  const { currentUser } = useAuth();
+  const [devices, setDevices] = useState([]);
+  const [zones, setZones] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [selectedDevice, setSelectedDevice] = useState(null);
+  const [mapCenter, setMapCenter] = useState([48.8566, 2.3522]);
+  const [mapZoom, setMapZoom] = useState(13);
+  const [loading, setLoading] = useState(true);
+
+  // Chargement données Firestore
+  useEffect(() => {
+    console.log('🔄 Chargement données Firestore...');
+
+    const unsubDevices = onSnapshot(collection(db, 'devices'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        lastSeenDate: doc.data().lastSeen?.toDate()
+      })).sort((a, b) => (b.lastSeen?.seconds || 0) - (a.lastSeen?.seconds || 0));
+      
+      console.log('📱 Devices chargés:', data.length);
+      setDevices(data);
+      setLoading(false);
+      
+      // Centrer sur premier device actif
+      const activeDevice = data.find(d => d.location && d.status === 'active');
+      if (activeDevice && !selectedDevice) {
+        setMapCenter([activeDevice.location.lat, activeDevice.location.lng]);
+        setSelectedDevice(activeDevice);
+      }
+    });
+
+    const unsubZones = onSnapshot(collection(db, 'zones'), (snapshot) => {
+      const data = snapshot.docs.map(doc => {
+        const d = doc.data();
+        let lat, lng;
+        
+        if (d.coordinates && Array.isArray(d.coordinates) && d.coordinates.length > 0) {
+          lat = d.coordinates[0].lat;
+          lng = d.coordinates[0].lng;
+        } else if (d.center) {
+          lat = d.center.lat;
+          lng = d.center.lng;
+        } else if (d.lat && d.lng) {
+          lat = d.lat;
+          lng = d.lng;
+        }
+        
+        return {
+          id: doc.id,
+          name: d.name || 'Zone sans nom',
+          type: d.type || 'safe',
+          alertLevel: d.alertLevel || 'low',
+          lat,
+          lng,
+          radius: d.radius || d.surface || 500,
+          coordinates: d.coordinates?.map(c => [c.lat, c.lng]) || []
+        };
+      }).filter(z => z.lat && z.lng);
+      
+      console.log('🗺️ Zones chargées:', data.length);
+      setZones(data);
+    });
+
+    const unsubAlerts = onSnapshot(
+      query(collection(db, 'alerts'), where('status', '==', 'active')),
+      (snapshot) => {
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          timestampDate: doc.data().timestamp?.toDate()
+        })).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+        
+        console.log('🚨 Alertes chargées:', data.length);
+        setAlerts(data);
+      }
+    );
+
+    return () => {
+      unsubDevices();
+      unsubZones();
+      unsubAlerts();
+    };
+  }, []);
+
+  // Stats calculées
+  const stats = {
+    totalZones: zones.length,
+    connectedDevices: devices.filter(d => {
+      if (!d.lastSeenDate) return false;
+      return (Date.now() - d.lastSeenDate) / 60000 < 5;
+    }).length,
+    activeAlerts: alerts.filter(a => a.status === 'active').length,
+    violations: devices.filter(d => d.status === 'alert').length
+  };
+
+  const centerOnDevice = (device) => {
+    if (!device.location) return;
+    setMapCenter([device.location.lat, device.location.lng]);
+    setMapZoom(16);
+    setSelectedDevice(device);
+  };
+
+  const fitBounds = () => {
+    const validPoints = [
+      ...devices.filter(d => d.location).map(d => [d.location.lat, d.location.lng]),
+      ...zones.map(z => [z.lat, z.lng])
+    ];
+    
+    if (validPoints.length === 0) return;
+    
+    // Calculer le centre moyen
+    const avgLat = validPoints.reduce((sum, p) => sum + p[0], 0) / validPoints.length;
+    const avgLng = validPoints.reduce((sum, p) => sum + p[1], 0) / validPoints.length;
+    
+    setMapCenter([avgLat, avgLng]);
+    setMapZoom(validPoints.length === 1 ? 16 : 13);
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'active': return 'success';
+      case 'alert': return 'error';
+      case 'inactive': return 'default';
+      default: return 'default';
+    }
+  };
+
+  const getBatteryColor = (level) => {
+    if (!level) return 'default';
+    if (level > 50) return 'success';
+    if (level > 20) return 'warning';
+    return 'error';
+  };
+
+  const formatLastSeen = (date) => {
+    if (!date) return 'Jamais';
+    const seconds = Math.floor((Date.now() - date) / 1000);
+    if (seconds < 60) return 'À l\'instant';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min`;
+    return `${Math.floor(seconds / 3600)} h`;
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ 
+        height: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: 2
+      }}>
+        <CircularProgress size={60} />
+        <Typography variant="h6">Chargement du dashboard...</Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: 3, height: 'calc(100vh - 64px)' }}>
+      {/* CSS pour animations */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.1); opacity: 0.8; }
+        }
+        .leaflet-popup-content-wrapper {
+          border-radius: 12px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        .leaflet-popup-content {
+          margin: 12px;
+          font-family: system-ui, -apple-system, sans-serif;
+        }
+      `}</style>
+
+      {/* Header */}
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="h4" fontWeight="bold">Tableau de Bord</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Avatar 
+            src={currentUser?.photoURL} 
+            alt={currentUser?.displayName}
+            sx={{ width: 45, height: 45, border: '2px solid', borderColor: 'primary.main' }}
+          >
+            {currentUser?.displayName?.[0] || 'A'}
+          </Avatar>
+          <Box>
+            <Typography variant="body2" fontWeight="bold">
+              {currentUser?.displayName || 'Admin'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {currentUser?.email}
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Stats Cards */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card elevation={2}>
+            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Avatar sx={{ bgcolor: 'info.main', width: 56, height: 56 }}>
+                <LocationIcon />
+              </Avatar>
+              <Box>
+                <Typography color="textSecondary" variant="body2">Zones Actives</Typography>
+                <Typography variant="h3" fontWeight="bold">{stats.totalZones}</Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} sm={6} md={3}>
+          <Card elevation={2}>
+            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Avatar sx={{ bgcolor: 'success.main', width: 56, height: 56 }}>
+                <DevicesIcon />
+              </Avatar>
+              <Box>
+                <Typography color="textSecondary" variant="body2">Devices Connectés</Typography>
+                <Typography variant="h3" fontWeight="bold">{stats.connectedDevices}</Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} sm={6} md={3}>
+          <Card elevation={2}>
+            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Avatar sx={{ 
+                bgcolor: stats.activeAlerts > 0 ? 'error.main' : 'warning.main', 
+                width: 56, 
+                height: 56,
+                animation: stats.activeAlerts > 0 ? 'pulse 2s infinite' : 'none'
+              }}>
+                <AlertIcon />
+              </Avatar>
+              <Box>
+                <Typography color="textSecondary" variant="body2">Alertes Actives</Typography>
+                <Typography variant="h3" fontWeight="bold" color={stats.activeAlerts > 0 ? 'error' : 'inherit'}>
+                  {stats.activeAlerts}
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} sm={6} md={3}>
+          <Card elevation={2}>
+            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Avatar sx={{ 
+                bgcolor: stats.violations > 0 ? 'error.main' : 'success.main',
+                width: 56, 
+                height: 56 
+              }}>
+                <WarningIcon />
+              </Avatar>
+              <Box>
+                <Typography color="textSecondary" variant="body2">Violations</Typography>
+                <Typography variant="h3" fontWeight="bold" color={stats.violations > 0 ? 'error' : 'inherit'}>
+                  {stats.violations}
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Map + Sidebar */}
+      <Grid container spacing={3} sx={{ height: 'calc(100% - 200px)' }}>
+        {/* Carte Leaflet */}
+        <Grid item xs={12} md={8} sx={{ height: '100%' }}>
+          <Paper sx={{ height: '100%', position: 'relative', overflow: 'hidden', borderRadius: 3 }}>
+            <MapContainer
+              center={mapCenter}
+              zoom={mapZoom}
+              style={{ height: '100%', width: '100%' }}
+              scrollWheelZoom={true}
+            >
+              <MapController center={mapCenter} zoom={mapZoom} />
+              
+              {/* Fond de carte OpenStreetMap (gratuit) */}
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              
+              {/* Alternative avec plus de détails : */}
+              {/* <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              /> */}
+
+              {/* Zones */}
+              {zones.map(zone => {
+                const color = zone.type === 'danger' ? '#f44336' : '#ff9800';
+                
+                // Si polygone (plusieurs points)
+                if (zone.coordinates.length > 2) {
+                  return (
+                    <Polygon
+                      key={zone.id}
+                      positions={zone.coordinates}
+                      pathOptions={{
+                        fillColor: color,
+                        fillOpacity: 0.3,
+                        color: color,
+                        weight: 3,
+                        dashArray: zone.type === 'danger' ? '5, 5' : null
+                      }}
+                    >
+                      <Popup>
+                        <Box sx={{ minWidth: 200 }}>
+                          <Typography variant="subtitle1" fontWeight="bold" color={color}>
+                            {zone.name}
+                          </Typography>
+                          <Typography variant="body2">
+                            Type: {zone.type === 'danger' ? '⚠️ Danger' : '🔒 Sécurisée'}
+                          </Typography>
+                          <Typography variant="body2">
+                            Niveau: {zone.alertLevel}
+                          </Typography>
+                          {zone.radius && (
+                            <Typography variant="body2">
+                              Rayon: ~{Math.round(zone.radius)}m
+                            </Typography>
+                          )}
+                        </Box>
+                      </Popup>
+                    </Polygon>
+                  );
+                }
+                
+                // Sinon cercle
+                return (
+                  <Circle
+                    key={zone.id}
+                    center={[zone.lat, zone.lng]}
+                    radius={zone.radius}
+                    pathOptions={{
+                      fillColor: color,
+                      fillOpacity: 0.3,
+                      color: color,
+                      weight: 3
+                    }}
+                  >
+                    <Popup>
+                      <Box sx={{ minWidth: 200 }}>
+                        <Typography variant="subtitle1" fontWeight="bold" color={color}>
+                          {zone.name}
+                        </Typography>
+                        <Typography variant="body2">
+                          Type: {zone.type === 'danger' ? '⚠️ Danger' : '🔒 Sécurisée'}
+                        </Typography>
+                        <Typography variant="caption" display="block">
+                          {zone.lat.toFixed(5)}, {zone.lng.toFixed(5)}
+                        </Typography>
+                      </Box>
+                    </Popup>
+                  </Circle>
+                );
+              })}
+
+              {/* Devices */}
+              {devices.filter(d => d.location).map(device => (
+                <Marker
+                  key={device.id}
+                  position={[device.location.lat, device.location.lng]}
+                  icon={createDeviceIcon(device.status)}
+                >
+                  <Popup>
+                    <Box sx={{ minWidth: 220 }}>
+                      <Typography variant="h6" gutterBottom>
+                        {device.name}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={device.status?.toUpperCase()}
+                        color={getStatusColor(device.status)}
+                        sx={{ mb: 1 }}
+                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                        <BatteryIcon fontSize="small" color={getBatteryColor(device.batteryLevel)} />
+                        <Typography variant="body2">
+                          Batterie: {device.batteryLevel || 'N/A'}%
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                        📍 {device.location.lat.toFixed(6)}, {device.location.lng.toFixed(6)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Dernière maj: {formatLastSeen(device.lastSeenDate)}
+                      </Typography>
+                    </Box>
+                  </Popup>
+                </Marker>
+              ))}
+            </MapContainer>
+
+            {/* Bouton recentrer */}
+            <Box sx={{ position: 'absolute', bottom: 20, right: 20, zIndex: 1000 }}>
+              <Fab 
+                color="primary" 
+                onClick={fitBounds} 
+                size="medium"
+                title="Voir tout"
+              >
+                <CenterIcon />
+              </Fab>
+            </Box>
+          </Paper>
+        </Grid>
+
+        {/* Sidebar */}
+        <Grid item xs={12} md={4} sx={{ height: '100%' }}>
+          <Paper sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3 }}>
+            {/* Alertes */}
+            {stats.activeAlerts > 0 && (
+              <Box sx={{ p: 2, bgcolor: 'error.light' }}>
+                <Typography variant="subtitle1" color="error.dark" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  🚨 ALERTES ACTIVES ({stats.activeAlerts})
+                </Typography>
+                <List dense sx={{ mt: 1 }}>
+                  {alerts.slice(0, 3).map(alert => (
+                    <ListItem key={alert.id} sx={{ bgcolor: 'white', mb: 0.5, borderRadius: 1 }}>
+                      <ListItemText
+                        primary={alert.deviceName || alert.deviceId || 'Système'}
+                        secondary={alert.message || alert.type}
+                        primaryTypographyProps={{ variant: 'body2', fontWeight: 'bold' }}
+                        secondaryTypographyProps={{ variant: 'caption' }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
+            )}
+
+            <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+              {/* Zones */}
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <LocationIcon color="primary" />
+                Zones ({zones.length})
+              </Typography>
+              <List dense>
+                {zones.map(zone => (
+                  <ListItem 
+                    key={zone.id} 
+                    sx={{ 
+                      bgcolor: 'action.hover', 
+                      mb: 0.5, 
+                      borderRadius: 2,
+                      borderLeft: 4,
+                      borderColor: zone.type === 'danger' ? 'error.main' : 'warning.main'
+                    }}
+                  >
+                    <ListItemText
+                      primary={zone.name}
+                      secondary={
+                        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {zone.type === 'danger' ? '⚠️ Danger' : '🔒 Sécurisée'}
+                          <Typography component="span" variant="caption" color="text.secondary">
+                            • {Math.round(zone.radius)}m
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
+
+              <Divider sx={{ my: 2 }} />
+
+              {/* Devices */}
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <DevicesIcon color="primary" />
+                Devices ({devices.length})
+              </Typography>
+              <List dense>
+                {devices.map(device => (
+                  <ListItem
+                    key={device.id}
+                    button
+                    selected={selectedDevice?.id === device.id}
+                    onClick={() => centerOnDevice(device)}
+                    sx={{ 
+                      mb: 1, 
+                      borderRadius: 2, 
+                      bgcolor: device.status === 'alert' ? 'error.light' : 'background.paper',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <ListItemAvatar>
+                      <Badge
+                        overlap="circular"
+                        variant="dot"
+                        color={device.status === 'alert' ? 'error' : 'success'}
+                        invisible={!device.location}
+                      >
+                        <Avatar sx={{ 
+                          bgcolor: device.status === 'alert' ? 'error.main' : 'success.main',
+                          animation: device.status === 'alert' ? 'pulse 1.5s infinite' : 'none'
+                        }}>
+                          <PhoneIcon />
+                        </Avatar>
+                      </Badge>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {device.name}
+                          <Chip 
+                            size="small" 
+                            label={device.status?.toUpperCase()}
+                            color={getStatusColor(device.status)}
+                            sx={{ height: 20, fontSize: '0.7rem' }}
+                          />
+                        </Box>
+                      }
+                      secondary={
+                        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                          <BatteryIcon 
+                            fontSize="small" 
+                            color={getBatteryColor(device.batteryLevel)} 
+                          />
+                          <Typography component="span" variant="caption">
+                            {device.batteryLevel || '--'}% • {formatLastSeen(device.lastSeenDate)}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+
+            {/* Légende */}
+            <Box sx={{ p: 2, bgcolor: 'grey.50' }}>
+              <Typography variant="caption" display="block" gutterBottom fontWeight="bold">
+                Légende:
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: '#4caf50' }} />
+                  <Typography variant="caption">Device OK</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: '#f44336' }} />
+                  <Typography variant="caption">Alerte</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: '#ff9800' }} />
+                  <Typography variant="caption">Zone sécurisée</Typography>
+                </Box>
+              </Box>
+            </Box>
+          </Paper>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+};
+
+export default DashboardPage;

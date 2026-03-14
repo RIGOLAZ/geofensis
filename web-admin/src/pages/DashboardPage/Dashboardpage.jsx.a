@@ -1,0 +1,88 @@
+// components/DashboardPage.jsx
+import React, { useState, useEffect } from 'react';
+import { useGeofenceMonitor } from '../../hooks/useGeofencing';
+import { ZonePolygon } from '../../components/ZonePolygon';
+
+export const DashboardPage = () => {
+  const [devices, setDevices] = useState([]);
+  const [zones, setZones] = useState([]);
+  const [violations, setViolations] = useState([]);
+  
+  // 🎯 Hook personnalisé qui gère tout
+  const { previousStates } = useGeofenceMonitor(devices, zones, (violation) => {
+    setViolations(prev => {
+      // Éviter les doublons dans la liste
+      const exists = prev.find(v => 
+        v.deviceId === violation.deviceId && 
+        v.zoneId === violation.zoneId &&
+        v.type === violation.type &&
+        new Date() - new Date(v.timestamp) < 60000 // 1 minute
+      );
+      
+      if (exists) return prev;
+      return [violation, ...prev].slice(0, 50); // Garder les 50 dernières
+    });
+  });
+
+  // Stats calculées
+  const stats = {
+    activeZones: zones.length,
+    connectedDevices: devices.filter(d => d.online).length,
+    totalAlerts: violations.length,
+    activeViolations: violations.filter(v => v.type === 'exit').length
+  };
+
+  return (
+    <div className="dashboard">
+      {/* Cartes de stats */}
+      <div className="stats-grid">
+        <StatCard 
+          icon="🎯" 
+          label="Zones Actives" 
+          value={stats.activeZones} 
+          color="blue" 
+        />
+        <StatCard 
+          icon="📱" 
+          label="Devices Connectés" 
+          value={stats.connectedDevices} 
+          color="green" 
+        />
+        <StatCard 
+          icon="🔔" 
+          label="Alertes" 
+          value={stats.totalAlerts} 
+          color="orange" 
+        />
+        <StatCard 
+          icon="🚨" 
+          label="Violations Actives" 
+          value={stats.activeViolations} 
+          color="red" 
+        />
+      </div>
+
+      {/* Carte */}
+      <div className="map-container">
+        <GoogleMap>
+          {zones.map(zone => (
+            <ZonePolygon 
+              key={zone.id}
+              zone={zone}
+              devices={devices}
+            />
+          ))}
+          {devices.map(device => (
+            <DeviceMarker key={device.id} device={device} />
+          ))}
+        </GoogleMap>
+      </div>
+
+      {/* Liste des alertes avec regroupement */}
+      <AlertsPanel 
+        violations={violations} 
+        onClear={() => setViolations([])}
+      />
+    </div>
+  );
+};

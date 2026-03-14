@@ -1,0 +1,16 @@
+{
+  "projects": {
+    "default": "geofensis",
+    "staging": "geofensis-staging",
+    "production": "geofensis"
+  },
+  "targets": {
+    "geofensis": {
+      "hosting": {
+        "admin": [
+          "geofensis-admin"
+        ]
+      }
+    }
+  }
+}
