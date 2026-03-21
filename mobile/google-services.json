@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "870023915404",
+    "project_id": "etralis",
+    "storage_bucket": "etralis.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:870023915404:android:88be496a9a079c281798a9",
+        "android_client_info": {
+          "package_name": "com.etralis.geofencingpro"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "870023915404-hu9uv9g5sicndpo5jur0gdetlb5obqrr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBBqzi9_jL3te3YsUhEiqcN3j5biroS6Vo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "870023915404-hu9uv9g5sicndpo5jur0gdetlb5obqrr.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

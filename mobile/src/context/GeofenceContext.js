@@ -25,9 +25,7 @@ export const GeofenceProvider = ({ children }) => {
       setZones(zonesData);
       
       // Mettre à jour le service de geofencing
-      zonesData.forEach(zone => {
-        GeofenceService.addZone(zone);
-      });
+      zonesData.forEach(zone => GeofenceService.addZone(zone));
       
       setLoading(false);
     });

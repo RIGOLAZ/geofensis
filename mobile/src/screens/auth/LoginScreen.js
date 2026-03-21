@@ -37,7 +37,7 @@ export default function LoginScreen({ navigation }) {
     >
       <Surface style={styles.surface}>
         <Image 
-          source={require('../../assets/images/logo.png')} 
+          source={require('../../assets/images/splash.png')} 
           style={styles.logo}
           resizeMode="contain"
         />

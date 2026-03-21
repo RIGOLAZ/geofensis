@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import * as SMS from 'expo-sms';
-import { Audio } from 'expo-av';
+import { Audio } from 'expo-audio';
+import * as Application from 'expo-application';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { isPointInZone, getDistanceToBoundary, predictBoundaryCrossing } from '../../utils/geospatial/polygons';
@@ -11,9 +12,12 @@ class GeofenceService {
     this.deviceStatus = new Map();
     this.sound = null;
     this.unsubscribe = null;
+    this.initialized = false;
   }
 
   async initialize() {
+    if (this.initialized) return;
+    
     // Charger le son d'alerte
     try {
       const { sound } = await Audio.Sound.createAsync(
@@ -26,6 +30,7 @@ class GeofenceService {
 
     // Écouter les zones actives en temps réel
     this.subscribeToZones();
+    this.initialized = true;
   }
 
   subscribeToZones() {
@@ -39,17 +44,22 @@ class GeofenceService {
         const zone = { id: change.doc.id, ...change.doc.data() };
         
         if (change.type === 'added' || change.type === 'modified') {
-          this.zones.set(zone.id, {
-            ...zone,
-            lastStatus: false,
-            entryTime: null,
-            exitTime: null,
-            previousPoint: null,
-          });
+          this.addZone(zone); // Appel de la nouvelle méthode
         } else if (change.type === 'removed') {
           this.zones.delete(zone.id);
         }
       });
+    });
+  }
+
+  // ✅ Nouvelle méthode addZone
+  addZone(zone) {
+    this.zones.set(zone.id, {
+      ...zone,
+      lastStatus: false,
+      entryTime: null,
+      exitTime: null,
+      previousPoint: null,
     });
   }
 
@@ -147,7 +157,10 @@ class GeofenceService {
   async playAlertSound() {
     if (this.sound) {
       try {
-        await this.sound.replayAsync();
+        // ✅ Stop et reset avant de rejouer
+        await this.sound.stopAsync();
+        await this.sound.setPositionAsync(0);
+        await this.sound.playAsync();
       } catch (error) {
         console.log('Sound play error:', error);
       }
@@ -156,11 +169,16 @@ class GeofenceService {
 
   async logEvent(type, zone, location, metadata = {}) {
     try {
+      // ✅ Utilisation correcte de deviceId
+      const deviceId = Application.androidId || 
+                       Application.getIosIdForVendorAsync() || 
+                       'unknown';
+
       await addDoc(collection(db, 'geofence_logs'), {
         type,
         zoneId: zone.id,
         zoneName: zone.name,
-        deviceId: global.deviceId || 'unknown',
+        deviceId,
         location: {
           latitude: location.latitude,
           longitude: location.longitude,
@@ -181,6 +199,8 @@ class GeofenceService {
     if (this.sound) {
       this.sound.unloadAsync();
     }
+    this.zones.clear();
+    this.initialized = false;
   }
 }
 

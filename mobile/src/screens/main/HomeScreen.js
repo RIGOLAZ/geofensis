@@ -2,8 +2,8 @@
 import { View, StyleSheet, Text, Switch } from 'react-native';
 import MapView, { Circle, Polygon, Marker } from 'react-native-maps';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../services/firebase';
-import LocationService from '../services/locationService';
+import LocationService from '../../services/location/LocationService';
+import { db } from '../../config/firebase';
 
 export default function HomeScreen({ route }) {
   const { workerId, workerName } = route.params;

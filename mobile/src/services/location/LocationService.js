@@ -1,9 +1,9 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import { db } from './firebase';
 import { doc, setDoc, collection, onSnapshot, getDocs, query, where } from 'firebase/firestore';
 import * as Notifications from 'expo-notifications';
 import * as BackgroundFetch from 'expo-background-fetch';
+import { db } from '../../config/firebase';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
